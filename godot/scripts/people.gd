@@ -15,7 +15,30 @@ static func spawn(model: String, parent: Node3D) -> Node3D:
 	parent.add_child(n)
 	for ap in n.find_children("*", "AnimationPlayer", true, false):
 		ap.stop()
+	matte(n)
 	return n
+
+
+## Soft cloth and skin instead of the shiny default Mixamo materials.
+static var _matte := {}
+
+
+static func matte(n: Node3D, keep_normal := true) -> void:
+	for m in n.find_children("*", "MeshInstance3D", true, false):
+		for si in m.mesh.get_surface_count():
+			var mat = m.get_active_material(si)
+			if mat is StandardMaterial3D:
+				var key := [mat, keep_normal]
+				if not _matte.has(key):
+					var c: StandardMaterial3D = mat.duplicate()
+					c.roughness = 0.82
+					c.roughness_texture = null
+					c.metallic = 0.0
+					c.metallic_texture = null
+					c.metallic_specular = 0.12
+					c.normal_enabled = keep_normal and c.normal_enabled
+					_matte[key] = c
+				m.set_surface_override_material(si, _matte[key])
 
 
 static func skel(n: Node3D) -> Skeleton3D:
@@ -165,3 +188,68 @@ static func idle(n: Node3D, t: float, phase: float) -> void:
 	var base: Quaternion = n.get_meta("spine_base")
 	var wob := Quaternion(Vector3.RIGHT, sin(t * 1.3 + phase) * 0.025) * Quaternion(Vector3.UP, sin(t * 0.4 + phase * 2) * 0.06)
 	s.set_bone_pose_rotation(b, base * wob)
+
+
+## Two-bone reach: puts the hand of [param side] at [param target], with the elbow bending
+## towards [param pole] (a world direction). Returns how far the target was out of reach.
+static func reach(s: Skeleton3D, side: String, target: Vector3, pole: Vector3) -> float:
+	var sp := world_pos(s, side + "Arm")
+	var a := sp.distance_to(world_pos(s, side + "ForeArm"))
+	var b := world_pos(s, side + "ForeArm").distance_to(world_pos(s, side + "Hand"))
+	var to := target - sp
+	var dist := to.length()
+	var d := clampf(dist, absf(a - b) + 0.01, a + b - 0.002)
+	var dir := to.normalized()
+	var cos_a := clampf((a * a + d * d - b * b) / (2.0 * a * d), -1.0, 1.0)
+	var sin_a := sqrt(maxf(0.0, 1.0 - cos_a * cos_a))
+	var perp := pole - dir * pole.dot(dir)
+	if perp.length() < 0.001:
+		perp = Vector3.DOWN
+	var elbow := sp + dir * (a * cos_a) + perp.normalized() * (a * sin_a)
+	aim_at(s, side + "Arm", side + "ForeArm", elbow)
+	aim_at(s, side + "ForeArm", side + "Hand", sp + dir * d)
+	return maxf(0.0, dist - d)
+
+
+## Points the hand along [param dir] and turns it so the thumb side faces [param thumb].
+static func orient_hand(s: Skeleton3D, side: String, dir: Vector3, thumb: Vector3) -> void:
+	aim(s, side + "Hand", side + "HandMiddle1", dir)
+	var hb := bone(s, side + "Hand")
+	var hp := world_pos(s, side + "Hand")
+	var axis := (world_pos(s, side + "HandMiddle1") - hp).normalized()
+	var cur := world_pos(s, side + "HandIndex1") - world_pos(s, side + "HandPinky1")
+	cur -= axis * cur.dot(axis)
+	var want := thumb - axis * thumb.dot(axis)
+	if cur.length() < 0.0001 or want.length() < 0.0001:
+		return
+	var ang := cur.normalized().signed_angle_to(want.normalized(), axis)
+	var sg := s.global_transform.basis
+	var g := gpose(s, hb)
+	var new_g := sg.inverse() * (Basis(axis, ang) * (sg * g.basis))
+	var p := s.get_bone_parent(hb)
+	var pb := gpose(s, p).basis if p >= 0 else Basis()
+	s.set_bone_pose_rotation(hb, (pb.inverse() * new_g).get_rotation_quaternion())
+
+
+## Curls the fingers: 0 = open hand, 1 = tight fist.
+static func grip(s: Skeleton3D, side: String, amount: float, axis := Vector3.RIGHT) -> void:
+	for f in ["Index", "Middle", "Ring", "Pinky"]:
+		for j in [1, 2, 3]:
+			var b := bone(s, side + "Hand" + f + str(j))
+			if b < 0:
+				continue
+			var rest := s.get_bone_rest(b).basis.get_rotation_quaternion()
+			s.set_bone_pose_rotation(b, rest * Quaternion(axis, amount * [0.0, 1.1, 1.3, 0.9][j]))
+	for j in [1, 2, 3]:
+		var b := bone(s, side + "HandThumb" + str(j))
+		if b < 0:
+			continue
+		var rest := s.get_bone_rest(b).basis.get_rotation_quaternion()
+		s.set_bone_pose_rotation(b, rest * Quaternion(axis, amount * 0.45))
+
+
+## Shrinks the head away, for the player's own first-person body.
+static func hide_head(s: Skeleton3D) -> void:
+	var b := bone(s, "Neck")
+	if b >= 0:
+		s.set_bone_pose_scale(b, Vector3.ONE * 0.001)

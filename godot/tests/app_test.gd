@@ -21,15 +21,25 @@ func _ready() -> void:
 	add_child(main)
 	await _frames(20)
 	await shot("menu")
+	if "--picker" in args:
+		main.show_bartender_pick()
+		await _secs(1.5)
+		await shot("picker")
+		main._pick_bartender("louise" if "--mia" in args else "david")
+		await _frames(10)
 	main.start_shift()
 	await _secs(1.0)
 	await shot("shift")
 	var order := ["gin_tonic", "mojito", "margarita", "old_fashioned", "espresso_martini", "whisky_sour", "cosmopolitan", "daiquiri"]
 	var first := 0
+	var count := 99
 	for a in args:
 		if a.begins_with("--from="):
 			first = int(a.substr(7))
-	for k in range(first, order.size()):
+		if a.begins_with("--count="):
+			count = int(a.substr(8))
+	var all_shots := "--shots" in args
+	for k in range(first, mini(order.size(), first + count)):
 		var gi := k % 4
 		var g: Dictionary = main.guests[gi]
 		if not g.order.is_empty() or g.served == null:
@@ -40,7 +50,7 @@ func _ready() -> void:
 		g.order = Recipes.drink(order[k])
 		g.patience = 100.0
 		await _frames(2)
-		await make(gi, k < 2)
+		await make(gi, k < 2 or all_shots)
 	main.shift_left = 0.0
 	await _secs(1.0)
 	await shot("summary")
@@ -95,6 +105,9 @@ func make(gi: int, shots: bool) -> void:
 			"muddle":
 				for n in 6:
 					main._muddle()
+					if shots and n == 2:
+						await _secs(0.6)
+						await shot(id + "_muddle")
 			"shake":
 				await _secs(0.5)
 				for n in 17:
@@ -106,10 +119,14 @@ func make(gi: int, shots: bool) -> void:
 				var ev := InputEventMouseMotion.new()
 				ev.relative = Vector2(80, 60)
 				ev.button_mask = MOUSE_BUTTON_MASK_LEFT
+				await _secs(0.6)
 				for n in 40:
 					if main.expecting != "stir":
 						break
 					main._unhandled_input(ev)
+					if shots and n == 15:
+						await _frames(3)
+						await shot(id + "_stir")
 			"strain":
 				main._strain()
 				await _secs(1.8)
