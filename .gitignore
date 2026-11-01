@@ -1,0 +1,18 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+.kotlin/
+# Never commit the signing key or its passwords
+*.jks
+*.keystore
+keystore.properties
+
+# Godot
+.godot/
+godot/android/
+godot/addons/neon_ads/bin/
+*.import.tmp
