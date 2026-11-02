@@ -1563,6 +1563,7 @@ func set_bartender(model: String) -> void:
 		host.queue_free()
 	# on the menu you see your bartender behind the bar, turned toward you
 	host = People.spawn(model, bar)
+	People.self_lit(host, 2.0 if model == "david" else 1.3)
 	People.set_height(host, 1.76 if model == "david" else 1.68)
 	People.arms_down(host)
 	# the camera looks toward +z, so screen-right is -x: stand right of the menu
@@ -1738,6 +1739,7 @@ func show_bartender_pick() -> void:
 	var ids := BARTENDERS.keys()
 	for i in ids.size():
 		var n := People.spawn(ids[i], bar)
+		People.self_lit(n, 2.0 if ids[i] == "david" else 1.3)
 		n.rotation.y = PI + (0.2 if i == 0 else -0.2)
 		People.set_height(n, 1.76 if i == 0 else 1.68)
 		People.arms_down(n)
