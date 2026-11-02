@@ -23,6 +23,7 @@ const ICE_SPOT := Vector3(0.0, TOP, -0.55)
 
 ## Things the player can tap: id -> world position (rail bottles, station items, ice well).
 var pickables := {}
+var garnish_spots := {} ## garnish kind -> its compartment in the garnish tray
 var rail_nodes := {}
 
 var _rng := RandomNumberGenerator.new()
@@ -312,6 +313,7 @@ const GLASS_BOWL := {
 	"martini": [.104, .16, .006, .06],
 	"flute": [.1, .198, .012, .026],
 	"mug": [.006, .096, .04, .043],
+	"tin": [.005, .165, .035, .045],
 }
 
 
@@ -349,7 +351,12 @@ func set_fill(g: Node3D, fill: float, color: Color) -> void:
 	var top: float = lerpf(b[0], b[1], fill)
 	var rt: float = lerpf(b[2], b[3], fill)
 	liq.mesh = lathe(profile([[0, b[0]], [b[2] * .96, b[0]], [rt * .96, top], [0, top]]), 28)
-	(liq.material_override as StandardMaterial3D).albedo_color = Color(color, 0.8)
+	# clear spirits get a warm tint and a soft glow so you can see the level in the glass
+	var lm := liq.material_override as StandardMaterial3D
+	lm.albedo_color = Color(color.lerp(Color(1.0, 0.85, 0.55), 0.25), 0.85)
+	lm.emission_enabled = true
+	lm.emission = color.lerp(Color(1.0, 0.8, 0.5), 0.4)
+	lm.emission_energy_multiplier = 0.35
 
 
 ## Shaker tin (big tin of a Boston shaker) with a liquid level like a glass.
@@ -357,6 +364,11 @@ func make_tin() -> Node3D:
 	var g := Node3D.new()
 	g.set_meta("kind", "tin")
 	add_mesh(lathe(profile([[0, 0], [.035, 0], [.036, .003], [.045, .17], [.0455, .173]]), 32), mat(Color(0.82, 0.84, 0.86), 0.8, 0.2), Vector3.ZERO, g)
+	var liq := MeshInstance3D.new()
+	liq.name = "Liquid"
+	liq.material_override = liquid_mat(Color.WHITE)
+	liq.visible = false
+	g.add_child(liq)
 	return g
 
 
@@ -479,7 +491,16 @@ func _build_station() -> void:
 	box(Vector3(WX * 2, .006, WZ0 - WZ1), steel, Vector3(0, TOP - d, (WZ0 + WZ1) / 2))
 	box(Vector3(.012, .04, WZ0 - WZ1), steel, Vector3(0, TOP - .02, (WZ0 + WZ1) / 2))
 	var c := Vector3(0, TOP - .06, (WZ0 + WZ1) / 2)
-	ice_cubes(self, c, Vector3(WX - .03, .03, (WZ0 - WZ1) / 2 - .03), 700)
+	# the well is full, so its ice can be opaque: see-through ice here was hundreds of
+	# overlapping layers to draw on every frame, a big part of the lag on tablets
+	var well := ice_cubes(self, c, Vector3(WX - .03, .03, (WZ0 - WZ1) / 2 - .03), 380, 0.03)
+	var wm := StandardMaterial3D.new()
+	wm.albedo_color = Color(0.68, 0.78, 0.88)
+	wm.roughness = 0.15
+	wm.metallic_specular = 0.9
+	wm.rim_enabled = true
+	wm.rim = 0.4
+	well.material_override = wm
 	pickables["ice"] = Vector3(0, TOP, (WZ0 + WZ1) / 2)
 	# scoop
 	var s := Node3D.new()
@@ -531,6 +552,49 @@ func _build_station() -> void:
 		pickables[id] = pos + Vector3(0, .09, 0)
 
 
+## A steel tray of garnishes on the bar top, 2 rows of 5 compartments.
+func build_garnish_tray() -> void:
+	var c := Vector3(-0.5, BT, -1.08)
+	box(Vector3(.36, .012, .17), steel_dark, c + Vector3(0, .006, 0))
+	var kinds := Recipes.GARNISH.keys()
+	for i in kinds.size():
+		var p := c + Vector3(-.14 + (i % 5) * .07, .012, -.04 + (i / 5) * .08)
+		box(Vector3(.064, .03, .074), steel, p + Vector3(0, .015, 0))
+		box(Vector3(.056, .002, .066), mat(Color(0.12, 0.12, 0.12), 0.5, 0.4), p + Vector3(0, .031, 0))
+		garnish_spots[kinds[i]] = p + Vector3(0, .035, 0)
+		for k in 2:
+			var g := garnish(kinds[i], self, p + Vector3((k - 0.5) * .018, .034, (k - 0.5) * .012))
+			g.rotation.y = _rng.randf() * TAU
+			if kinds[i] in ["olive", "cherry"]:
+				g.rotation = Vector3(PI / 2, g.rotation.y, 0)
+
+
+## A TV hanging over the guests, facing the bartender. Its text is set from main.gd.
+func build_tv() -> Label3D:
+	var tv := Node3D.new()
+	tv.set_meta("dyn", true)
+	tv.position = Vector3(0, 2.15, -2.55)
+	add_child(tv)
+	box(Vector3(1.36, .8, .05), mat(Color(0.03, 0.03, 0.03), 0.3, 0.3), Vector3.ZERO, tv)
+	var screen := box(Vector3(1.28, .72, .01), emissive(Color(0.08, 0.1, 0.16), 1.0), Vector3(0, 0, .027), tv)
+	screen.name = "Screen"
+	for x in [-.4, .4]:
+		cyl(.008, .008, .6, steel_dark, Vector3(x, .7, 0), tv, 6)
+	var t := Label3D.new()
+	t.font_size = 40
+	t.pixel_size = 0.0018
+	t.width = 640
+	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.shaded = false
+	t.outline_size = 0
+	t.position = Vector3(0, 0, .034)
+	t.modulate = Color(1.0, 0.92, 0.75)
+	tv.add_child(t)
+	tv.rotation.y = 0.0
+	return t
+
+
 ## (Re)builds the speed rail bottles, so mocktail mode can swap them.
 func build_rail() -> void:
 	for n in rail_nodes.values():
@@ -542,6 +606,19 @@ func build_rail() -> void:
 		rail_nodes[ids[k]] = bottle(ids[k], p, self, true, .036, .29)
 		rail_nodes[ids[k]].set_meta("dyn", true)
 		pickables[ids[k]] = p + Vector3(0, .15, 0)
+		var tag := Label3D.new()
+		tag.text = Recipes.SOURCES[ids[k]].name
+		tag.font_size = 30
+		tag.pixel_size = 0.0009
+		tag.width = 150
+		tag.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tag.modulate = Color(1.0, 0.95, 0.85)
+		tag.outline_size = 8
+		tag.outline_modulate = Color(0, 0, 0, 0.9)
+		tag.shaded = false
+		tag.position = Vector3(0, .07, .065)
+		tag.rotation.x = -0.6
+		rail_nodes[ids[k]].add_child(tag)
 
 
 func _build_bar_top() -> void:
@@ -551,6 +628,7 @@ func _build_bar_top() -> void:
 	var rail := cyl(.02, .02, 3.8, mat(Color(0.79, 0.64, 0.35), 1.0, 0.25), Vector3(0, .22, BZ1 - .2), self, 12)
 	rail.rotation.z = PI / 2
 	box(Vector3(3.6, .01, .01), emissive(Color(1.0, 0.69, 0.35), 5.0), Vector3(0, 1.075, -.84))
+	build_garnish_tray()
 	# bar mat and tools
 	box(Vector3(1.15, .008, .14), rubber, Vector3(.05, BT + .004, -.89))
 	var tin := make_tin()
@@ -623,13 +701,13 @@ func _build_lounge() -> void:
 		cyl(.03, .03, .75, steel_dark, Vector3(x, .37, -7), self, 8)
 		sphere(.05, emissive(Color(1.0, 0.63, 0.25), 4.0), Vector3(x, .8, -7))
 	var sign := Label3D.new()
-	sign.text = "Bartender Academy"
-	sign.font_size = 160
+	sign.text = "The Cocktail Academy"
+	sign.font_size = 100
 	sign.pixel_size = 0.004
 	sign.modulate = Color(2.4, 1.4, 1.9)
 	sign.outline_modulate = Color(1.0, 0.3, 0.55, 0.8)
 	sign.outline_size = 18
-	sign.position = Vector3(0, 3.2, -8.9)
+	sign.position = Vector3(-3.4, 3.0, -8.9)
 	sign.shaded = false
 	add_child(sign)
 
@@ -653,7 +731,7 @@ func _build_lights() -> void:
 	e.sky = sky
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
 	e.tonemap_exposure = 1.0
-	e.glow_enabled = true
+	e.glow_enabled = false # glow costs several full-screen passes on tablets
 	e.glow_intensity = 0.45
 	e.glow_bloom = 0.05
 	e.glow_hdr_threshold = 1.6

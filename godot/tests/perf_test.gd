@@ -24,4 +24,5 @@ func _ready() -> void:
 			RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
 			RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)]
 		print(info)
+		get_viewport().get_texture().get_image().save_png("/tmp/shots/perf_%s.png" % v)
 	get_tree().quit()

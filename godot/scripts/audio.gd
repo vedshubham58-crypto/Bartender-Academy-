@@ -35,7 +35,7 @@ func _ready() -> void:
 	_music.stream = m
 	_music.volume_db = -9.0
 	add_child(_music)
-	if Save.sound:
+	if Save.sound and Save.music and not _music.playing:
 		_music.play()
 
 
@@ -69,8 +69,19 @@ func set_sound(on: bool) -> void:
 		for p in _loops.values():
 			p.stop()
 		_music.stop()
-	elif not _music.playing:
+	elif Save.music and not _music.playing:
 		_music.play()
+
+
+## Music on or off, separate from the sound effects.
+func set_music(on: bool) -> void:
+	Save.music = on
+	Save.save()
+	if on and Save.sound:
+		if not _music.playing:
+			_music.play()
+	else:
+		_music.stop()
 
 
 ## Silences the game while a full-screen ad plays.

@@ -132,9 +132,7 @@ for b in range(BARS * 4):
         add(kick(0.18), t)
     if b % 2 == 1:
         add(noise_hit(0.25, 0.09, hp=6, vel=0.1), t, pan=0.15)  # brush swish on 2 and 4
-for clave in [0, 1.5, 3, 5, 6.5]:  # bossa rim clave over 2 bars
-    for rep in range(BARS // 2):
-        add(rim(0.22), (rep * 8 + clave) * BEAT, pan=0.35)
+# (no rim clave or vibes melody: testers heard them as a second song on top)
 for e in range(BARS * 8):
     swing = 0.06 * BEAT if e % 2 else 0.0
     add(noise_hit(0.05, 0.012, hp=3, vel=0.08 + 0.04 * (e % 2 == 0)), e * BEAT / 2 + swing, pan=-0.35)
@@ -142,8 +140,7 @@ for e in range(BARS * 8):
 # vibraphone melody in the second half (sparse, so it stays in the background)
 mel = [(32, 74), (33.5, 76), (34, 78), (36, 76), (38, 73), (40, 71), (41.5, 73), (42, 74), (44, 76), (46, 69),
        (48, 74), (49, 76), (50, 78), (51.5, 81), (52, 78), (54, 76), (56, 74), (57.5, 73), (58, 71), (60, 69), (62, 66)]
-for b, n in mel:
-    add(vibes(n, 0.2), b * BEAT, pan=0.3)
+# melody left out on purpose, see above
 
 # room reverb: convolve with decaying noise (FFT, circular so the tail wraps into the loop start)
 def reverb(x, secs=1.6, mix=0.22, seed=0):
