@@ -6,7 +6,7 @@ const PATIENCE := 110.0
 const POUR_RATE := 22.0 ## ml per second while holding pour (slow enough to stop on the line)
 const TOP_RATE := 70.0
 const BARTENDERS := {
-	"david": {"name": "Leo", "about": "Calm, quick hands, classic black uniform."},
+	"remy": {"name": "Leo", "about": "Easy smile, quick hands, relaxed style."},
 	"louise": {"name": "Mia", "about": "Sharp, precise, smart navy uniform."},
 }
 const SHAKE_SPOT := Vector3(0.06, 1.2, -0.95) ## the tin is held up here while shaking
@@ -120,7 +120,9 @@ func _ready() -> void:
 	jigger.position = Bar.JIGGER_SPOT
 	bar.add_child(jigger)
 	_spawn_people()
-	set_bartender(Save.bartender if Save.bartender != "" else "david")
+	if Save.bartender == "david":
+		Save.bartender = "remy" # Leo got a new look
+	set_bartender(Save.bartender if Save.bartender != "" else "remy")
 	tv_text = bar.build_tv()
 	title_font = FontVariation.new()
 	title_font.base_font = load("res://fonts/PlayfairDisplay.ttf")
@@ -138,7 +140,7 @@ func _ready() -> void:
 # =============================================================== people
 
 func _spawn_people() -> void:
-	var models := ["kate", "remy", "megan", "leonard"]
+	var models := ["kate", "david", "megan", "leonard"]
 	for i in Bar.SEATS.size():
 		var x: float = Bar.SEATS[i]
 		var n := People.spawn(models[i], bar)
@@ -525,7 +527,7 @@ func show_menu() -> void:
 	v.add_child(sp)
 	v.add_child(_button("START SHIFT  ▶", start_shift, 30))
 	v.add_child(_button("BAR BOOK  ·  recipes", show_book, 20, Color(0.25, 0.2, 0.3)))
-	v.add_child(_button("BARTENDER: %s" % BARTENDERS.get(Save.bartender, BARTENDERS["david"]).name, show_bartender_pick, 20, Color(0.25, 0.2, 0.3)))
+	v.add_child(_button("BARTENDER: %s" % BARTENDERS.get(Save.bartender, BARTENDERS["remy"]).name, show_bartender_pick, 20, Color(0.25, 0.2, 0.3)))
 	var mt := "MOCKTAIL MODE: %s" % ("ON" if Save.mocktail else "OFF")
 	if Save.mocktail_locked():
 		mt += " (under 18)"
@@ -612,7 +614,16 @@ func show_book() -> void:
 		if not Save.mocktail:
 			txt += "\n[b]Mocktail twin:[/b] %s — swap the spirits for juices in mocktail mode." % d.mocktail
 		rt.text = txt
+		rt.scroll_active = false
 		cv.add_child(rt)
+	_let_scroll(v)
+
+
+## Lets a finger drag anywhere in a scroll list scroll it: only buttons keep the touch.
+func _let_scroll(root: Control) -> void:
+	for c in root.find_children("*", "Control", true, false):
+		if not c is BaseButton:
+			(c as Control).mouse_filter = Control.MOUSE_FILTER_PASS
 
 
 # =============================================================== shift
@@ -1563,8 +1574,8 @@ func set_bartender(model: String) -> void:
 		host.queue_free()
 	# on the menu you see your bartender behind the bar, turned toward you
 	host = People.spawn(model, bar)
-	People.self_lit(host, 2.0 if model == "david" else 1.3)
-	People.set_height(host, 1.76 if model == "david" else 1.68)
+	People.self_lit(host, 1.25)
+	People.set_height(host, 1.76 if model == "remy" else 1.68)
 	People.arms_down(host)
 	# the camera looks toward +z, so screen-right is -x: stand right of the menu
 	host.rotation.y = PI - 0.4
@@ -1739,7 +1750,7 @@ func show_bartender_pick() -> void:
 	var ids := BARTENDERS.keys()
 	for i in ids.size():
 		var n := People.spawn(ids[i], bar)
-		People.self_lit(n, 2.0 if ids[i] == "david" else 1.3)
+		People.self_lit(n, 1.25)
 		n.rotation.y = PI + (0.2 if i == 0 else -0.2)
 		People.set_height(n, 1.76 if i == 0 else 1.68)
 		People.arms_down(n)

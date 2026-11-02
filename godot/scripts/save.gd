@@ -10,7 +10,7 @@ var best := {} ## drink id -> best stars
 var shifts := 0
 var birth_year := 0 ## 0 = not asked yet
 var mocktail := false
-var bartender := "" ## "david" or "louise"; "" = not chosen yet
+var bartender := "" ## "remy" (Leo) or "louise" (Mia); "" = not chosen yet
 var sound := true
 var music := true
 var asked_notify := false
