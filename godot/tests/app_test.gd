@@ -25,7 +25,7 @@ func _ready() -> void:
 		main.show_bartender_pick()
 		await _secs(1.5)
 		await shot("picker")
-		main._pick_bartender("louise" if "--mia" in args else "david")
+		main._pick_bartender("louise" if "--mia" in args else "remy")
 		await _frames(10)
 	main.start_shift()
 	await _secs(1.0)
