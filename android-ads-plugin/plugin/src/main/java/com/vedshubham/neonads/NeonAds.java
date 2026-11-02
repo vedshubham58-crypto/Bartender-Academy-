@@ -6,6 +6,9 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.view.Gravity;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
 
 import java.util.Calendar;
 
@@ -14,6 +17,8 @@ import androidx.collection.ArraySet;
 
 import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdSize;
+import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
@@ -180,6 +185,50 @@ public class NeonAds extends GodotPlugin {
             @Override
             public void onAdFailedToLoad(@NonNull LoadAdError error) {
                 loadingRewarded = false;
+            }
+        });
+    }
+
+    // ------------------------------------------------------------ banner
+
+    private AdView banner;
+    private FrameLayout bannerBox;
+
+    /** Shows a standard banner along the bottom (or top) edge of the screen, over the game. */
+    @UsedByGodot
+    public void showBanner(String unitId, boolean top) {
+        Activity a = getActivity();
+        if (a == null || unitId.isEmpty()) return;
+        a.runOnUiThread(() -> {
+            if (banner == null) {
+                banner = new AdView(a);
+                banner.setAdUnitId(unitId);
+                banner.setAdSize(AdSize.BANNER);
+                bannerBox = new FrameLayout(a);
+                a.addContentView(bannerBox, new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                banner.loadAd(new AdRequest.Builder().build());
+            }
+            if (banner.getParent() == null) {
+                bannerBox.addView(banner);
+            }
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER_HORIZONTAL | (top ? Gravity.TOP : Gravity.BOTTOM));
+            banner.setLayoutParams(lp);
+            banner.setVisibility(android.view.View.VISIBLE);
+            banner.resume();
+        });
+    }
+
+    @UsedByGodot
+    public void hideBanner() {
+        Activity a = getActivity();
+        if (a == null) return;
+        a.runOnUiThread(() -> {
+            if (banner != null) {
+                banner.setVisibility(android.view.View.GONE);
+                banner.pause();
             }
         });
     }

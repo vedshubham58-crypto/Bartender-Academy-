@@ -28,12 +28,12 @@ func _ready() -> void:
 		p.stream = _sfx[n]
 		add_child(p)
 		_loops[n] = p
-	# lounge music, made by tools/make_music.py, loops forever under everything
+	# upbeat house music, made by tools/make_music_party.py, loops forever under everything
 	_music = AudioStreamPlayer.new()
-	var m: AudioStreamOggVorbis = load("res://audio/music_lounge.ogg")
+	var m: AudioStreamOggVorbis = load("res://audio/music_party.ogg")
 	m.loop = true
 	_music.stream = m
-	_music.volume_db = -9.0
+	_music.volume_db = -11.0
 	add_child(_music)
 	if Save.sound and Save.music and not _music.playing:
 		_music.play()

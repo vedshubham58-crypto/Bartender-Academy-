@@ -5,6 +5,7 @@ extends Node
 ## Google's test ad units. Swap in real ones before launch.
 const INTERSTITIAL_ID := "ca-app-pub-3940256099942544/1033173712"
 const REWARDED_ID := "ca-app-pub-3940256099942544/5224354917"
+const BANNER_ID := "ca-app-pub-3940256099942544/6300978111"
 
 var _ads: Object
 var _after_interstitial := Callable()
@@ -20,6 +21,23 @@ func _ready() -> void:
 		_ads.rewarded_closed.connect(_rewarded_closed)
 		_ads.start(INTERSTITIAL_ID, REWARDED_ID)
 	schedule_reminders()
+
+
+var banner_on := false
+
+
+## A small banner ad: along the bottom on the menu and score card, along the top
+## edge during a shift (where it covers only sky, not the bar).
+func show_banner(top := false) -> void:
+	banner_on = true
+	if _ads and _ads.has_method("showBanner"):
+		_ads.showBanner(BANNER_ID, top)
+
+
+func hide_banner() -> void:
+	banner_on = false
+	if _ads and _ads.has_method("hideBanner"):
+		_ads.hideBanner()
 
 
 ## Whether a reward video can be shown right now.

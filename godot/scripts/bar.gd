@@ -472,7 +472,7 @@ func _build_floor() -> void:
 	var f := mat(Color.WHITE, 0.0, 0.5)
 	f.albedo_texture = _noise_tex(0.01, _grad([Color(0.12, 0.07, 0.04), Color(0.2, 0.12, 0.07), Color(0.15, 0.09, 0.05)]))
 	f.uv1_scale = Vector3(3, 30, 1)
-	box(Vector3(20, .02, 14), f, Vector3(0, -.01, -8.4))
+	box(Vector3(24, .02, 9.2), f, Vector3(0, -.01, -5.5))
 
 
 func _build_station() -> void:
@@ -688,16 +688,50 @@ func _build_back_bar() -> void:
 			b.rotation.y = PI
 
 
+## The open-air terrace on top of the tower: booths, a glass railing and the city below.
 func _build_lounge() -> void:
-	box(Vector3(20, 6, .1), mat(Color(0.16, 0.08, 0.05), 0, 0.9), Vector3(0, 3, -9))
+	var edge := -10.0
+	# the terrace floor carries on round the sides and behind the back bar
+	var deck := mat(Color(0.2, 0.16, 0.13), 0.0, 0.7)
+	box(Vector3(24, .02, 4.4), deck, Vector3(0, -.01, 3.8))
+	for sx in [-1, 1]:
+		box(Vector3(9, .02, 3.0), deck, Vector3(sx * 7.5, -.01, 0.1))
+	# the tower's top slab and a glass railing all the way round
+	var slab := mat(Color(0.12, 0.11, 0.11), 0.2, 0.6)
+	var glass := StandardMaterial3D.new()
+	glass.albedo_color = Color(0.6, 0.75, 0.85, 0.12)
+	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glass.roughness = 0.05
+	glass.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var rail := mat(Color(0.75, 0.72, 0.68), 0.9, 0.25)
+	var strip := emissive(Color(1.0, 0.7, 0.4), 2.5)
+	# [centre, length, along x?]
+	for side in [[Vector3(0, 0, edge), 24.0, true], [Vector3(0, 0, 6.0), 24.0, true],
+			[Vector3(-12, 0, -2), 16.0, false], [Vector3(12, 0, -2), 16.0, false]]:
+		var c: Vector3 = side[0]
+		var n: float = side[1]
+		var sz := func(t: float, h: float) -> Vector3: return Vector3(n, h, t) if side[2] else Vector3(t, h, n)
+		box(sz.call(.4, .5), slab, c + Vector3(0, -.25, 0))
+		box(sz.call(.02, 1.05), glass, c + Vector3(0, .55, 0))
+		box(sz.call(.07, .05), rail, c + Vector3(0, 1.1, 0))
+		box(sz.call(.02, .02), strip, c + Vector3(0, .03, 0))
+		for i in int(n / 2.0) + 1:
+			var o := -n * .5 + i * 2.0
+			box(Vector3(.05, 1.1, .05), rail, c + (Vector3(o, .55, 0) if side[2] else Vector3(0, .55, o)))
+	# string lights between two tall posts
+	var post := mat(Color(0.06, 0.06, 0.07), 0.6, 0.4)
+	for x in [-7.2, 7.2]:
+		cyl(.05, .06, 3.4, post, Vector3(x, 1.7, edge + .5), self, 10)
 	var bulb := emissive(Color(1.0, 0.69, 0.35), 6.0)
 	for i in 36:
 		var x := -7.0 + i * 0.4
-		sphere(.03, bulb, Vector3(x, 3.1 - 0.25 * sin(PI * fposmod(x, 2.0) / 2.0), -8.8))
+		sphere(.03, bulb, Vector3(x, 3.2 - 0.25 * sin(PI * fposmod(x, 2.0) / 2.0), edge + .5))
+	# low lounge sofas facing the bar, so the guests have the view behind them
 	var booth := mat(Color(0.23, 0.1, 0.07), 0.0, 0.6)
 	for i in 5:
-		var x := -5.0 + i * 2.6
-		box(Vector3(1.4, .9, .5), booth, Vector3(x, .45, -7.8))
+		var x := -5.2 + i * 2.6
+		box(Vector3(1.4, .45, .55), booth, Vector3(x, .225, -7.65))
+		box(Vector3(1.4, .5, .14), booth, Vector3(x, .7, -7.95))
 		cyl(.35, .35, .04, wood, Vector3(x, .75, -7))
 		cyl(.03, .03, .75, steel_dark, Vector3(x, .37, -7), self, 8)
 		sphere(.05, emissive(Color(1.0, 0.63, 0.25), 4.0), Vector3(x, .8, -7))
@@ -708,26 +742,197 @@ func _build_lounge() -> void:
 	sign.modulate = Color(2.4, 1.4, 1.9)
 	sign.outline_modulate = Color(1.0, 0.3, 0.55, 0.8)
 	sign.outline_size = 18
-	sign.position = Vector3(-3.4, 3.0, -8.9)
+	sign.position = Vector3(-7.2, 3.75, edge + .5)
 	sign.shaded = false
 	add_child(sign)
+	_build_skyline()
+
+
+## A night-time desert city far below: lit office towers, a glowing street grid and one
+## record-tall spire tower on the horizon. Made-up buildings, no real landmark copied.
+func _build_skyline() -> void:
+	var ground := -150.0 # the city's streets, far below the terrace
+	var win := StandardMaterial3D.new()
+	win.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	win.albedo_texture = _window_tex()
+	win.uv1_triplanar = true
+	win.uv1_world_triplanar = true
+	win.uv1_scale = Vector3.ONE / 48.0
+	win.albedo_color = Color(1.5, 1.5, 1.5)
+	win.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	var dark := mat(Color(0.03, 0.035, 0.06), 0.0, 1.0)
+	dark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var streets := StandardMaterial3D.new()
+	streets.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	streets.albedo_texture = _street_tex()
+	streets.uv1_triplanar = true
+	streets.uv1_world_triplanar = true
+	streets.uv1_scale = Vector3.ONE / 160.0
+	streets.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	box(Vector3(6000, 1, 6000), streets, Vector3(0, ground, -1000))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 21
+	# three window looks so the towers don't all match: warm offices, blue glass, mixed
+	var wins: Array[StandardMaterial3D] = [win]
+	for tint in [Color(0.8, 1.15, 1.6), Color(1.6, 1.25, 0.9)]:
+		var m: StandardMaterial3D = win.duplicate()
+		m.albedo_color = tint
+		wins.append(m)
+	var low: StandardMaterial3D = win.duplicate()
+	low.albedo_color = Color(0.9, 0.8, 0.75)
+	var crowns: Array[StandardMaterial3D] = []
+	for c in [Color(0.2, 0.8, 1.0), Color(1.0, 0.25, 0.7), Color(1.0, 0.65, 0.2), Color(0.6, 0.35, 1.0)]:
+		crowns.append(emissive(c, 1.3))
+	var beacon := emissive(Color(1, .1, .05), 6.0)
+	# office towers all around the terrace, thickest in front where the guests look
+	for i in 260:
+		var ang := rng.randf_range(-1.4, 1.4) if i < 200 else rng.randf_range(1.4, TAU - 1.4)
+		var dist := rng.randf_range(520.0, 2300.0)
+		var p := Vector3(sin(ang) * dist, 0, -cos(ang) * dist - 10.0)
+		if p.x > 900.0 and p.z < -900.0:
+			continue # that's the sea
+		# a downtown cluster near the big spire is taller
+		var downtown := p.distance_to(Vector3(-650, 0, -1700)) < 600.0
+		if absf(ang - atan2(-650.0, 1690.0)) < 0.06 and dist < 1650.0:
+			continue # keep the view of the big spire clear
+		var near := dist < 1100.0 and absf(ang) < 0.9 # right in front of the bar: keep the sky open
+		var h := rng.randf_range(60.0, 150.0 if near else 200.0) * (1.8 if rng.randf() < (0.4 if downtown else (0.0 if near else 0.12)) else 1.0)
+		var w := rng.randf_range(30.0, 60.0)
+		var d := rng.randf_range(30.0, 60.0)
+		var wm: StandardMaterial3D = wins[rng.randi() % wins.size()]
+		var top := ground + h
+		if rng.randf() < 0.25:
+			cyl(w * .5, w * .5, h, wm, Vector3(p.x, ground + h * .5, p.z), self, 12)
+		else:
+			box(Vector3(w, h, d), wm, Vector3(p.x, ground + h * .5, p.z))
+			if rng.randf() < 0.35:
+				# a stepped top
+				var h2 := h * rng.randf_range(0.15, 0.3)
+				box(Vector3(w * .65, h2, d * .65), wm, Vector3(p.x, top + h2 * .5, p.z))
+				top += h2
+		if h > 140.0 and rng.randf() < 0.55:
+			# a glowing crown band, like the lit tops of real towers at night
+			box(Vector3(w * 1.02, 4.0, d * 1.02), crowns[rng.randi() % crowns.size()], Vector3(p.x, top - 6.0, p.z))
+		box(Vector3(w * .7, 2, d * .7), dark, Vector3(p.x, top + 1, p.z))
+		if h > 150.0:
+			sphere(2.0, beacon, Vector3(p.x, top + 3, p.z))
+		if h > 250.0:
+			cyl(.8, 1.5, 40, dark, Vector3(p.x, top + 20, p.z), self, 6)
+			sphere(3.0, beacon, Vector3(p.x, top + 41, p.z))
+	# low-rise blocks fill the ground between the towers
+	for i in 420:
+		var ang := rng.randf_range(-PI, PI)
+		var dist := rng.randf_range(300.0, 2600.0)
+		var p := Vector3(sin(ang) * dist, 0, -cos(ang) * dist - 10.0)
+		if p.x > 900.0 and p.z < -900.0:
+			continue
+		var h := rng.randf_range(8.0, 35.0)
+		box(Vector3(rng.randf_range(25, 70), h, rng.randf_range(25, 70)), low, Vector3(p.x, ground + h * .5, p.z))
+	# a wide boulevard of street lights running to the downtown spire
+	var road := emissive(Color(1.0, 0.55, 0.2), 1.0)
+	var to := Vector3(-650, 0, -1700)
+	var seg := box(Vector3(10, 1.2, to.length()), road, Vector3(to.x * .5, ground + 1, to.z * .5))
+	seg.rotation.y = atan2(to.x, to.z)
+	var tail := emissive(Color(1.0, 0.2, 0.15), 1.0)
+	var seg2 := box(Vector3(5, 1.2, to.length()), tail, Vector3(to.x * .5 + 14, ground + 1, to.z * .5))
+	seg2.rotation.y = seg.rotation.y
+	# the sea off to the right, with the moon's path shining on it
+	var sea := mat(Color(0.02, 0.03, 0.07), 0.0, 1.0)
+	sea.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	box(Vector3(3000, 1, 3000), sea, Vector3(2400, ground + 1.0, -2400))
+	var glint := emissive(Color(1.0, 0.9, 0.75), 1.2)
+	for k in 40:
+		var t := 0.15 + k * 0.021
+		var q := Vector3(900, 0, -2600) * t + Vector3(rng.randf_range(-30, 30), 0, 0)
+		if q.x > 900.0 and q.z < -900.0:
+			box(Vector3(rng.randf_range(20, 70) * t * 1.5, .5, 3.0 + 6.0 * t), glint, Vector3(q.x, ground + 2.0, q.z))
+	_build_spire(Vector3(-650, ground, -1700), win, dark)
+	# a big pale moon and a scatter of stars
+	var moon := emissive(Color(1.0, 0.92, 0.8), 1.4)
+	moon.disable_fog = true
+	sphere(40.0, moon, Vector3(900, 520, -2600))
+	var star := emissive(Color(1, 1, 1), 1.5)
+	star.disable_fog = true
+	for k in 160:
+		var az := rng.randf_range(-PI, PI)
+		var el := rng.randf_range(0.18, 1.2)
+		var dir := Vector3(sin(az) * cos(el), sin(el), -cos(az) * cos(el))
+		var sz := rng.randf_range(3.0, 6.0)
+		box(Vector3(sz, sz, sz), star, dir * 3200.0)
+
+
+## One supertall tower that steps in as it rises, ending in a long needle.
+func _build_spire(base: Vector3, win: Material, dark: Material) -> void:
+	var edge := emissive(Color(0.8, 0.9, 1.0), 4.0)
+	var y := 0.0
+	var tiers := [[150.0, 70.0], [130.0, 58.0], [110.0, 47.0], [95.0, 37.0], [80.0, 28.0], [60.0, 20.0], [45.0, 13.0]]
+	for ti in tiers.size():
+		var h: float = tiers[ti][0]
+		var r: float = tiers[ti][1]
+		# three wings around a round core, each tier a little slimmer
+		for k in 3:
+			var a := k * TAU / 3.0 + ti * 0.0
+			var wing := box(Vector3(r * .55, h, r), win, base + Vector3(sin(a) * r * .5, y + h * .5, cos(a) * r * .5))
+			wing.rotation.y = a
+			box(Vector3(1.2, h, 1.2), edge, base + Vector3(sin(a) * r, y + h * .5, cos(a) * r))
+		cyl(r * .42, r * .45, h, win, base + Vector3(0, y + h * .5, 0), self, 16)
+		y += h
+	cyl(5, 10, 90, win, base + Vector3(0, y + 45, 0), self, 12)
+	y += 90
+	cyl(.8, 5, 170, edge, base + Vector3(0, y + 85, 0), self, 8)
+	sphere(4.0, emissive(Color(1, .15, .1), 8.0), base + Vector3(0, y + 172, 0))
+
+
+## Office windows: a grid of lit and dark panes on a dark facade.
+func _window_tex() -> ImageTexture:
+	var img := Image.create(128, 128, false, Image.FORMAT_RGB8)
+	img.fill(Color(0.05, 0.055, 0.09))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var lit := [Color(1.0, 0.82, 0.5), Color(1.0, 0.9, 0.7), Color(0.75, 0.85, 1.0), Color(1.0, 0.7, 0.4)]
+	for cy in 16:
+		for cx in 16:
+			var c := Color(0.08, 0.09, 0.14)
+			if rng.randf() < 0.55:
+				c = lit[rng.randi() % lit.size()] * rng.randf_range(0.6, 1.0)
+			img.fill_rect(Rect2i(cx * 8 + 1, cy * 8 + 2, 6, 5), c)
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+
+## The street grid seen from far above: dark blocks with orange roads and car lights.
+func _street_tex() -> ImageTexture:
+	var img := Image.create(256, 256, false, Image.FORMAT_RGB8)
+	img.fill(Color(0.025, 0.025, 0.045))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	for i in 900:
+		img.set_pixel(rng.randi() % 256, rng.randi() % 256, Color(0.9, 0.7, 0.45) * rng.randf_range(0.3, 0.9))
+	for k in 4:
+		img.fill_rect(Rect2i(k * 64 + rng.randi() % 9, 0, 2, 256), Color(0.6, 0.36, 0.16))
+		img.fill_rect(Rect2i(0, k * 64 + rng.randi() % 9, 256, 2), Color(0.6, 0.36, 0.16))
+	img.fill_rect(Rect2i(126, 0, 4, 256), Color(0.85, 0.65, 0.4))
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 func _build_lights() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
-	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color(0.04, 0.025, 0.02)
+	e.background_mode = Environment.BG_SKY
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(0.35, 0.25, 0.18)
 	e.ambient_light_energy = 0.55
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	var sky := Sky.new()
 	var sm := ProceduralSkyMaterial.new()
-	sm.sky_top_color = Color(0.5, 0.35, 0.22)
-	sm.sky_horizon_color = Color(0.9, 0.7, 0.45)
-	sm.ground_bottom_color = Color(0.1, 0.06, 0.04)
-	sm.ground_horizon_color = Color(0.4, 0.28, 0.18)
+	# just after sunset: deep blue overhead, a warm glow on the horizon
+	sm.sky_top_color = Color(0.03, 0.05, 0.16)
+	sm.sky_horizon_color = Color(0.85, 0.42, 0.32)
+	sm.sky_curve = 0.12
+	sm.ground_bottom_color = Color(0.02, 0.02, 0.04)
+	sm.ground_horizon_color = Color(0.5, 0.28, 0.3)
+	sm.sun_angle_max = 0.0
 	sky.sky_material = sm
 	e.sky = sky
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
@@ -737,8 +942,9 @@ func _build_lights() -> void:
 	e.glow_bloom = 0.05
 	e.glow_hdr_threshold = 1.6
 	e.fog_enabled = true
-	e.fog_light_color = Color(0.25, 0.15, 0.09)
-	e.fog_density = 0.035
+	e.fog_light_color = Color(0.4, 0.26, 0.32) # city haze
+	e.fog_density = 0.0006
+	e.fog_sky_affect = 0.0
 	env.environment = e
 	add_child(env)
 	# Few lights and no shadows: the OpenGL renderer draws every object once per light,
@@ -771,8 +977,8 @@ func _build_lights() -> void:
 	add_child(led)
 	var lounge := OmniLight3D.new()
 	lounge.light_color = Color(1.0, 0.6, 0.31)
-	lounge.light_energy = 3.0
-	lounge.omni_range = 5.5
+	lounge.light_energy = 3.6
+	lounge.omni_range = 7.0
 	lounge.position = Vector3(0, 2.6, -6.5)
 	add_child(lounge)
 	var back := OmniLight3D.new()
@@ -826,7 +1032,7 @@ func bake_static() -> void:
 			if m == null:
 				continue
 			var z := xf.origin.z
-			var k := ("back" if z > 0.5 else ("lounge" if z < -3.0 else "bar")) + _mat_key(m)
+			var k := ("back" if z > 0.5 else ("city" if z < -20.0 else ("lounge" if z < -3.0 else "bar"))) + _mat_key(m)
 			if not groups.has(k):
 				var st := SurfaceTool.new()
 				st.begin(Mesh.PRIMITIVE_TRIANGLES)
