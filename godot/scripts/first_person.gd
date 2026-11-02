@@ -32,6 +32,8 @@ func _init(model_name: String, parent: Node3D) -> void:
 		s.set_bone_pose_scale(hb, Vector3.ONE / 1.1)
 	People.arms_down(node)
 	People.matte(node, false)
+	# the bar lamps sit right above your own arms, so tone them down a little
+	People.self_lit(node, 0.72)
 	for m in node.find_children("*", "MeshInstance3D", true, false):
 		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 

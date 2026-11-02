@@ -9,7 +9,8 @@ const BARTENDERS := {
 	"remy": {"name": "Leo", "about": "Easy smile, quick hands, relaxed style."},
 	"louise": {"name": "Mia", "about": "Sharp, precise, smart navy uniform."},
 }
-const SHAKE_SPOT := Vector3(0.06, 1.2, -0.95) ## the tin is held up here while shaking
+const SHAKE_TILT := -0.45 ## the shaker leans so each hand stays on its own side
+const SHAKE_SPOT := Vector3(0.05, 1.17, -0.88) ## the tin is held up here while shaking
 
 const VIEWS := {
 	"bar": [Vector3(0, 1.6, .5), Vector3(0, 1.08, -1.5), 60.0],
@@ -40,6 +41,7 @@ var time := 0.0
 var in_shift := false
 var shift_left := 0.0
 var shift_stats := {}
+var boost := {} ## shop boosts running this shift
 
 # the drink being made
 var cur := {}
@@ -117,6 +119,8 @@ func _ready() -> void:
 	cam.attributes = ca
 	_set_view("bar", 0.0)
 	jigger = bar.make_jigger()
+	bar.skin_tool(jigger, Save.tool_skin)
+	bar.set_light_theme(Save.light_theme)
 	jigger.position = Bar.JIGGER_SPOT
 	bar.add_child(jigger)
 	_spawn_people()
@@ -522,11 +526,20 @@ func show_menu() -> void:
 	v.add_child(sub)
 	v.add_child(_label("Work the bar. Learn real cocktails.", 20, Color(1, 1, 1, 0.85)))
 	v.add_child(_label("● %d coins   ·   %d of %d drinks unlocked" % [Save.coins, Save.unlocked, Recipes.DRINKS.size()], 20, C_GOLD))
+	v.add_child(_label(_next_unlock_text(), 18, Color(1.0, 0.85, 0.55, 0.85)))
 	var sp := Control.new()
 	sp.custom_minimum_size = Vector2(0, 10)
 	v.add_child(sp)
 	v.add_child(_button("START SHIFT  ▶", start_shift, 30))
-	v.add_child(_button("BAR BOOK  ·  recipes", show_book, 20, Color(0.25, 0.2, 0.3)))
+	var mrow := HBoxContainer.new()
+	mrow.add_theme_constant_override("separation", 12)
+	v.add_child(mrow)
+	var bb := _button("BAR BOOK", show_book, 20, Color(0.25, 0.2, 0.3))
+	bb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mrow.add_child(bb)
+	var shop_b := _button("SHOP  ● %d" % Save.coins, show_shop, 20, Color(0.55, 0.4, 0.1))
+	shop_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mrow.add_child(shop_b)
 	v.add_child(_button("BARTENDER: %s" % BARTENDERS.get(Save.bartender, BARTENDERS["remy"]).name, show_bartender_pick, 20, Color(0.25, 0.2, 0.3)))
 	var mt := "MOCKTAIL MODE: %s" % ("ON" if Save.mocktail else "OFF")
 	if Save.mocktail_locked():
@@ -587,7 +600,7 @@ func show_book() -> void:
 		var cv := VBoxContainer.new()
 		card.add_child(cv)
 		if i >= Save.unlocked:
-			cv.add_child(_label("🔒  %s" % d.name, 30, Color(1, 1, 1, 0.45)))
+			cv.add_child(_label("LOCKED  ·  %s" % d.name, 30, Color(1, 1, 1, 0.45)))
 			var more: int = (i - Save.unlocked) / 2 + 1
 			cv.add_child(_label("Unlocks after %d more shift%s." % [more, "" if more == 1 else "s"], 18, Color(1, 1, 1, 0.45)))
 			continue
@@ -635,6 +648,11 @@ func start_shift() -> void:
 		in_shift = true
 		shift_left = SHIFT_SECONDS
 		shift_stats = {"served": 0, "stars": 0.0, "coins": 0, "perfect": 0, "score": 0, "speedy": 0, "memory": 0, "flawless": 0, "streak": 0, "best_streak": 0}
+		# boosts bought in the shop last for this one shift
+		boost = Save.boosts.duplicate()
+		if not Save.boosts.is_empty():
+			Save.boosts = {}
+			Save.save()
 		hud.visible = true
 		_update_coins()
 		_set_view("bar", 0.6)
@@ -648,6 +666,13 @@ func start_shift() -> void:
 				_new_order(g, 6.0 * i)
 		_clear_actions()
 		hint_label.text = "Tap a guest's order to start making it"
+		var on := []
+		if boost.has("patience"):
+			on.append("Happy guests")
+		if boost.has("tips"):
+			on.append("Big tips")
+		if not on.is_empty():
+			show_toast("Boost on: %s" % " + ".join(on), C_GOLD, 40)
 	go.call()
 
 
@@ -657,7 +682,7 @@ func _new_order(g: Dictionary, delay := 0.0) -> void:
 	if Save.made.is_empty() and shift_stats.served == 0 and guests.find(g) == 0:
 		d = Recipes.DRINKS[0]
 	g.order = d
-	g.patience = PATIENCE + delay
+	g.patience = PATIENCE * (1.3 if boost.has("patience") else 1.0) + delay
 	if g.waiter:
 		g.table = randi_range(2, 9)
 
@@ -808,8 +833,11 @@ func _next_step() -> void:
 			progress_bar.value = 0
 			hint_label.text = "Shake hard! Swipe up and down fast (or shake your phone)"
 			if tin_node:
+				tin_node.get_node("Lid").visible = true
 				var tw := create_tween()
+				tw.set_parallel()
 				tw.tween_property(tin_node, "position", SHAKE_SPOT, 0.35).set_trans(Tween.TRANS_SINE)
+				tw.tween_property(tin_node, "rotation:z", SHAKE_TILT, 0.35).set_trans(Tween.TRANS_SINE)
 			Audio.loop("shake", true, -4.0)
 		"stir":
 			_set_view("work")
@@ -857,6 +885,7 @@ func _choose(kind: String, value: String) -> void:
 			Audio.play("clink")
 			if Recipes.uses_tin(cur.drink):
 				tin_node = bar.make_tin()
+				bar.skin_tool(tin_node, Save.tool_skin)
 				tin_node.position = Bar.TIN_SPOT
 				bar.add_child(tin_node)
 		"rim":
@@ -1038,14 +1067,17 @@ func _shake_step(amount: float) -> void:
 	progress += amount
 	progress_bar.value = progress
 	if tin_node:
-		tin_node.position = SHAKE_SPOT + Vector3(0.02 * sin(progress * 0.5), 0.05 * sin(progress * 0.5), 0.03 * cos(progress * 0.5))
-		tin_node.rotation.z = sin(progress * 0.5) * 0.3
+		# tilted with the top toward the right shoulder, pumped along its own axis
+		var k := sin(progress * 0.5)
+		tin_node.rotation.z = SHAKE_TILT + k * 0.12
+		tin_node.position = SHAKE_SPOT + Vector3(0.035 * k, 0.04 * k, 0.015 * cos(progress * 0.5))
 	if progress >= 100.0:
 		expecting = ""
 		Audio.loop("shake", false)
 		if tin_node:
 			tin_node.position = Bar.TIN_SPOT
 			tin_node.rotation = Vector3.ZERO
+			tin_node.get_node("Lid").visible = false
 		Audio.play("good", -6.0)
 		show_toast("Ice cold!", C_GREEN, 44)
 		_next_step()
@@ -1272,7 +1304,7 @@ func _serve() -> void:
 	var d: Dictionary = cur.drink
 	var stars := Recipes.stars_for(cur.mistakes, cur.errs)
 	var secs: float = time - cur.start
-	var mood: float = clampf(g.patience / PATIENCE, 0.0, 1.0)
+	var mood: float = clampf(g.patience / (PATIENCE * (1.3 if boost.has("patience") else 1.0)), 0.0, 1.0)
 	var tip: int = int(round(d.price * (0.5 + 0.5 * stars / 3.0) * (0.75 + 0.25 * mood))) + cur.perfect * 5 + (10 if secs < 35 else 0)
 	# little wins for this drink, shown under the stars and counted on the score card
 	var badges := []
@@ -1297,6 +1329,8 @@ func _serve() -> void:
 			score += 30 * shift_stats.streak
 	else:
 		shift_stats.streak = 0
+	if boost.has("tips"):
+		tip = int(round(tip * 1.5))
 	Save.coins += tip
 	Save.record(d.id, stars)
 	Save.save()
@@ -1387,6 +1421,14 @@ func _shift_summary() -> void:
 		Save.best_score = shift_stats.score
 	Save.save()
 	hud.visible = false
+	if unlocked != "":
+		_unlock_celebration(unlocked, _score_card.bind(unlocked, new_best))
+	else:
+		_score_card(unlocked, new_best)
+
+
+## Shows the shift's score card (after any unlock celebration).
+func _score_card(unlocked: String, new_best: bool) -> void:
 	var v := _center_box(_overlay(), 760)
 	v.add_theme_constant_override("separation", 8)
 	var avg: float = shift_stats.stars / maxf(1, shift_stats.served)
@@ -1442,6 +1484,11 @@ func _shift_summary() -> void:
 		var u := _label("New recipes unlocked: %s" % unlocked, 26, C_GREEN)
 		u.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		v.add_child(u)
+	var nxt := _next_unlock_text()
+	if nxt != "":
+		var n := _label(nxt, 22, Color(1.0, 0.85, 0.55))
+		n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		v.add_child(n)
 	if shift_stats.coins > 0:
 		var dbl := _button("▶  Watch a video: double tips", func(): pass, 24, Color(0.55, 0.4, 0.1))
 		dbl.pressed.connect(_double_tips.bind(dbl))
@@ -1453,6 +1500,214 @@ func _shift_summary() -> void:
 	row.add_child(_button("Bar Book", show_book, 22, Color(0.25, 0.2, 0.3)))
 	row.add_child(_button("Menu", show_menu, 22, Color(0.25, 0.2, 0.3)))
 	v.add_child(row)
+
+
+## "Next shift unlocks: X & Y", the reason to play one more.
+func _next_unlock_text() -> String:
+	if Save.unlocked >= Recipes.DRINKS.size():
+		return "You've unlocked every cocktail. Master them all!"
+	var names := []
+	for i in range(Save.unlocked, mini(Save.unlocked + 2, Recipes.DRINKS.size())):
+		names.append(Recipes.drink_name(Recipes.DRINKS[i]))
+	return "Next shift unlocks: %s" % " & ".join(names)
+
+
+## A big "NEW COCKTAIL UNLOCKED!" moment with confetti, then [param done].
+func _unlock_celebration(names: String, done: Callable) -> void:
+	var o := _overlay()
+	var bg := ColorRect.new()
+	bg.color = Color(0.02, 0.01, 0.02, 0.8)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	o.add_child(bg)
+	var vp := get_viewport().get_visible_rect().size
+	for side in [0.25, 0.75]:
+		var c := CPUParticles2D.new()
+		c.position = Vector2(vp.x * side, -20)
+		c.amount = 90
+		c.lifetime = 3.0
+		c.one_shot = false
+		c.explosiveness = 0.15
+		c.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+		c.emission_rect_extents = Vector2(vp.x * 0.25, 10)
+		c.direction = Vector2(0, 1)
+		c.spread = 25.0
+		c.gravity = Vector2(0, 260)
+		c.initial_velocity_min = 80.0
+		c.initial_velocity_max = 220.0
+		c.angular_velocity_min = -300.0
+		c.angular_velocity_max = 300.0
+		c.scale_amount_min = 6.0
+		c.scale_amount_max = 11.0
+		var gr := Gradient.new()
+		gr.offsets = PackedFloat32Array([0.0, 0.33, 0.66, 1.0])
+		gr.colors = PackedColorArray([Color(1.0, 0.8, 0.3), Color(1.0, 0.4, 0.6), Color(0.4, 0.85, 1.0), Color(0.5, 1.0, 0.6)])
+		c.color_initial_ramp = gr
+		o.add_child(c)
+	var v := VBoxContainer.new()
+	v.set_anchors_preset(Control.PRESET_CENTER)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 16)
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	o.add_child(cc)
+	cc.add_child(v)
+	var badge := _label("★  ACHIEVEMENT  ★", 26, C_GOLD)
+	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(badge)
+	var t := _label("NEW COCKTAILS UNLOCKED!" if " & " in names else "NEW COCKTAIL UNLOCKED!", 58, Color.WHITE)
+	t.add_theme_font_override("font", title_font)
+	t.add_theme_color_override("font_outline_color", Color(0.45, 0.15, 0.03))
+	t.add_theme_constant_override("outline_size", 12)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var n := _label(names, 40, C_GREEN)
+	n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(n)
+	var info := _label("%d of %d cocktails in your Bar Book" % [Save.unlocked, Recipes.DRINKS.size()], 22, Color(1, 1, 1, 0.75))
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(info)
+	var b := _button("AWESOME!  ▶", done, 30)
+	b.custom_minimum_size = Vector2(360, 0)
+	var bc := CenterContainer.new()
+	bc.add_child(b)
+	v.add_child(bc)
+	# pop in
+	v.pivot_offset = Vector2(400, 150)
+	v.scale = Vector2(0.6, 0.6)
+	v.modulate.a = 0.0
+	var tw := create_tween().set_parallel()
+	tw.tween_property(v, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(v, "modulate:a", 1.0, 0.25)
+	Audio.play("good", -2.0)
+
+
+# =============================================================== shop
+
+const SHOP := [
+	["unlock", "Unlock 2 cocktails now", "Skip ahead: the next 2 recipes open right away.", 400],
+	["boost_patience", "Happy guests", "Guests wait 30% longer, for your next shift.", 120],
+	["boost_tips", "Big tips", "+50% tips, for your next shift.", 150],
+	["tools_copper", "Copper tools", "A copper shaker and jigger.", 300],
+	["tools_gold", "Gold tools", "A shining gold shaker and jigger.", 900],
+	["tools_black", "Black tools", "Matte black, the pro bartender look.", 600],
+	["lights_blue", "Blue neon lights", "Cool blue lamps over your bar.", 500],
+	["lights_pink", "Pink neon lights", "Party pink lamps over your bar.", 500],
+	["lights_gold", "Royal gold lights", "Rich golden lamps over your bar.", 800],
+	["tools_steel", "Steel tools", "The classic look.", 0],
+	["lights_warm", "Warm lights", "The classic cosy glow.", 0],
+]
+
+
+func show_shop() -> void:
+	var o := _overlay()
+	var bg := ColorRect.new()
+	bg.color = Color(0.03, 0.02, 0.02, 0.9)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	o.add_child(bg)
+	var sc := ScrollContainer.new()
+	sc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sc.offset_left = 120
+	sc.offset_right = -120
+	sc.offset_top = 30
+	sc.offset_bottom = -60
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	o.add_child(sc)
+	var v := VBoxContainer.new()
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.add_theme_constant_override("separation", 12)
+	sc.add_child(v)
+	var top := HBoxContainer.new()
+	top.add_child(_label("SHOP", 48, C_GOLD))
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(sp)
+	top.add_child(_label("● %d   " % Save.coins, 34, C_GOLD))
+	top.add_child(_button("Close", show_menu, 22, Color(0.3, 0.25, 0.35)))
+	v.add_child(top)
+	v.add_child(_label("Spend your tips. Earn more by serving fast, perfect drinks.", 20, Color(1, 1, 1, 0.7)))
+	for it in SHOP:
+		var id: String = it[0]
+		if id == "unlock" and Save.unlocked >= Recipes.DRINKS.size():
+			continue
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", _panel(Color(0.12, 0.08, 0.07, 0.95), 16))
+		v.add_child(card)
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 16)
+		card.add_child(h)
+		var tv := VBoxContainer.new()
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(tv)
+		tv.add_child(_label(it[1], 28, Color.WHITE))
+		tv.add_child(_label(it[2], 18, Color(1, 1, 1, 0.7)))
+		var state := _shop_state(id)
+		var b: Button
+		if state == "using":
+			b = _button("IN USE ✓", func(): pass, 22, Color(0.2, 0.45, 0.3))
+			b.disabled = true
+		elif state == "owned":
+			b = _button("USE", _shop_use.bind(id), 22, Color(0.25, 0.4, 0.55))
+		elif state == "queued":
+			b = _button("READY ✓", func(): pass, 22, Color(0.2, 0.45, 0.3))
+			b.disabled = true
+		else:
+			var price: int = it[3]
+			b = _button("● %d" % price, _shop_buy.bind(id, price), 24, Color(1.0, 0.55, 0.25) if Save.coins >= price else Color(0.3, 0.27, 0.3))
+		b.custom_minimum_size = Vector2(170, 0)
+		h.add_child(b)
+	_let_scroll(v)
+
+
+func _shop_state(id: String) -> String:
+	if id.begins_with("tools_"):
+		if Save.tool_skin == id.substr(6):
+			return "using"
+		return "owned" if id in Save.owned else "buy"
+	if id.begins_with("lights_"):
+		if Save.light_theme == id.substr(7):
+			return "using"
+		return "owned" if id in Save.owned else "buy"
+	if id.begins_with("boost_") and Save.boosts.has(id.substr(6)):
+		return "queued"
+	return "buy"
+
+
+func _shop_buy(id: String, price: int) -> void:
+	if Save.coins < price:
+		show_toast("Not enough coins yet. Play a shift!", Color(1, 1, 1), 34)
+		return
+	Save.coins -= price
+	if id == "unlock":
+		var names := []
+		for k in 2:
+			if Save.unlocked < Recipes.DRINKS.size():
+				Save.unlocked += 1
+				names.append(Recipes.drink_name(Recipes.DRINKS[Save.unlocked - 1]))
+		Save.save()
+		_unlock_celebration(" & ".join(names), show_shop)
+		return
+	if id.begins_with("boost_"):
+		Save.boosts[id.substr(6)] = true
+		show_toast("Ready for your next shift!", C_GOLD, 40)
+	else:
+		Save.owned.append(id)
+		_shop_use(id)
+	Audio.play("good", -6.0)
+	Save.save()
+	show_shop()
+
+
+func _shop_use(id: String) -> void:
+	if id.begins_with("tools_"):
+		Save.tool_skin = id.substr(6)
+		bar.skin_tool(jigger, Save.tool_skin)
+		if tin_node:
+			bar.skin_tool(tin_node, Save.tool_skin)
+	elif id.begins_with("lights_"):
+		Save.light_theme = id.substr(7)
+		bar.set_light_theme(Save.light_theme)
+	Save.save()
+	show_shop()
 
 
 func pause_shift() -> void:
@@ -1711,15 +1966,29 @@ func _update_hands(delta: float) -> void:
 				lg = 0.6
 				ld = right
 		elif tin_node and (expecting == "shake" or _straining):
-			# both hands clasp the tin from the sides, one high and one low
-			r = tin_node.to_global(Vector3(0, .14, 0)) + right * 0.045 - fwd * 0.02
-			l = tin_node.to_global(Vector3(0, .04, 0)) - right * 0.045 - fwd * 0.02
-			rg = 0.85
-			lg = 0.85
-			rd = -right
-			ld = right
-			rt = Vector3.UP
-			lt = Vector3.UP
+			var up := tin_node.global_transform.basis.y.normalized()
+			if expecting == "shake":
+				# one hand grips the cap end from the right, the other the base from the left,
+				# far enough apart that the hands never meet
+				var side := tin_node.global_transform.basis.x.normalized()
+				r = tin_node.to_global(Vector3(0, .21, 0)) + side * 0.075 - fwd * 0.03
+				l = tin_node.to_global(Vector3(0, .03, 0)) - side * 0.075 - fwd * 0.03
+				rg = 0.8
+				lg = 0.8
+				rd = -side
+				ld = side
+				rt = up
+				lt = up
+			else:
+				# straining: the right hand holds the tin from the side, the left steadies it
+				r = tin_node.to_global(Vector3(0, .1, 0)) + right * 0.06 - fwd * 0.02
+				l = tin_node.to_global(Vector3(0, .16, 0)) - right * 0.06 - fwd * 0.02
+				rg = 0.85
+				lg = 0.6
+				rd = -right
+				ld = right
+				rt = up
+				lt = up
 	if time < _reach_until:
 		r = _reach_pos + Vector3(0.02, 0.0, 0.06)
 		rg = 0.55
