@@ -41,6 +41,18 @@ static func matte(n: Node3D, keep_normal := true) -> void:
 				m.set_surface_override_material(si, _matte[key])
 
 
+## Brightens a character's own colours so it reads clearly on any screen, whatever
+## the bar lights do (used for the bartender shown on the menus).
+static func self_lit(n: Node3D, amount := 1.6) -> void:
+	for m in n.find_children("*", "MeshInstance3D", true, false):
+		for si in m.mesh.get_surface_count():
+			var mat = m.get_active_material(si)
+			if mat is StandardMaterial3D:
+				var c: StandardMaterial3D = mat.duplicate()
+				c.albedo_color = Color(amount, amount * 0.97, amount * 0.94)
+				m.set_surface_override_material(si, c)
+
+
 static func skel(n: Node3D) -> Skeleton3D:
 	var s := n.find_children("*", "Skeleton3D", true, false)
 	return s[0] if s.size() > 0 else null
