@@ -6,6 +6,7 @@ const LOOPS := ["pour", "shake", "crowd"]
 var _sfx := {}
 var _players: Array[AudioStreamPlayer] = []
 var _loops := {}
+var _music: AudioStreamPlayer
 
 
 func _ready() -> void:
@@ -27,6 +28,15 @@ func _ready() -> void:
 		p.stream = _sfx[n]
 		add_child(p)
 		_loops[n] = p
+	# lounge music, made by tools/make_music.py, loops forever under everything
+	_music = AudioStreamPlayer.new()
+	var m: AudioStreamOggVorbis = load("res://audio/music_lounge.ogg")
+	m.loop = true
+	_music.stream = m
+	_music.volume_db = -9.0
+	add_child(_music)
+	if Save.sound:
+		_music.play()
 
 
 func play(name: String, volume_db := 0.0, pitch := 1.0) -> void:
@@ -58,6 +68,9 @@ func set_sound(on: bool) -> void:
 	if not on:
 		for p in _loops.values():
 			p.stop()
+		_music.stop()
+	elif not _music.playing:
+		_music.play()
 
 
 ## Silences the game while a full-screen ad plays.

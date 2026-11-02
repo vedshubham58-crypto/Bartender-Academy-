@@ -7,7 +7,7 @@ config/name="Bartender Academy"
 config/description="Work behind a real bar and learn cocktails you can make for real."
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
-config/icon="res://icon.svg"
+config/icon="res://icon.png"
 
 [autoload]
 
@@ -20,7 +20,7 @@ Ads="*res://scripts/ads.gd"
 
 window/size/viewport_width=1600
 window/size/viewport_height=900
-window/stretch/mode="canvas_items"
+window/stretch/mode="viewport"
 window/stretch/aspect="expand"
 window/handheld/orientation=0
 

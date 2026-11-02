@@ -16,9 +16,9 @@ const WZ1 := -0.74
 const SEAT_Z := -1.72
 const SEATS := [-1.3, -0.45, 0.45, 1.3]
 
-const GLASS_SPOT := Vector3(-0.14, BT + 0.008, -0.95)
-const TIN_SPOT := Vector3(0.36, BT + 0.008, -0.95)
-const JIGGER_SPOT := Vector3(0.12, BT + 0.008, -0.92)
+const GLASS_SPOT := Vector3(-0.12, BT + 0.008, -0.89)
+const TIN_SPOT := Vector3(0.3, BT + 0.008, -0.89)
+const JIGGER_SPOT := Vector3(0.1, BT + 0.008, -0.88)
 const ICE_SPOT := Vector3(0.0, TOP, -0.55)
 
 ## Things the player can tap: id -> world position (rail bottles, station items, ice well).
@@ -46,6 +46,7 @@ func _ready() -> void:
 	_build_back_bar()
 	_build_lounge()
 	_build_lights()
+	bake_static()
 
 
 # ---------------------------------------------------------------- helpers
@@ -216,7 +217,7 @@ func _make_materials() -> void:
 # ---------------------------------------------------------------- bottles & glassware
 
 ## A bottle with label, liquid and (in the rail) a pour spout. Returns the bottle node.
-func bottle(id: String, pos: Vector3, parent: Node3D = self, spout := true, r := 0.036, h := 0.29) -> Node3D:
+func bottle(id: String, pos: Vector3, parent: Node3D = self, spout := true, r := 0.036, h := 0.29, label := true) -> Node3D:
 	var src: Dictionary = Recipes.SOURCES[id]
 	var g := Node3D.new()
 	g.position = pos
@@ -248,6 +249,10 @@ func bottle(id: String, pos: Vector3, parent: Node3D = self, spout := true, r :=
 	band.cap_bottom = false
 	band.radial_segments = 28
 	add_mesh(band, mat(lab_col, 0.0, 0.6), Vector3(0, h * 0.33, 0), g)
+	if not label:
+		if not spout:
+			cyl(r * .36, r * .36, .02, mat(Color(0.1, 0.1, 0.1), 0.2, 0.4), Vector3(0, h + .01, 0), g, 12)
+		return g
 	var l := Label3D.new()
 	l.text = (src.brand + "\n" if src.brand != "" else "") + src.name.to_upper()
 	l.font_size = 40
@@ -296,6 +301,8 @@ const GLASS_PROFILES := {
 	"rocks": [[0, 0], [.041, 0], [.042, .015], [.044, .09], [.0445, .092]],
 	"coupe": [[0, 0], [.04, 0], [.042, .004], [.006, .012], [.004, .1], [.012, .11], [.045, .125], [.056, .15], [.057, .155]],
 	"martini": [[0, 0], [.04, 0], [.042, .004], [.005, .012], [.004, .1], [.006, .104], [.065, .165], [.066, .168]],
+	"flute": [[0, 0], [.035, 0], [.036, .004], [.004, .012], [.0035, .09], [.012, .1], [.024, .13], [.027, .2], [.0275, .203]],
+	"mug": [[0, 0], [.042, 0], [.043, .005], [.045, .1], [.046, .102]],
 }
 ## Inside of each glass as [bottom y, top y, radius at bottom, radius at top] for the liquid.
 const GLASS_BOWL := {
@@ -303,6 +310,8 @@ const GLASS_BOWL := {
 	"rocks": [.015, .085, .039, .041],
 	"coupe": [.11, .148, .012, .053],
 	"martini": [.104, .16, .006, .06],
+	"flute": [.1, .198, .012, .026],
+	"mug": [.006, .096, .04, .043],
 }
 
 
@@ -311,7 +320,16 @@ func make_glass(kind: String) -> Node3D:
 	var g := Node3D.new()
 	g.name = "Glass"
 	g.set_meta("kind", kind)
-	add_mesh(lathe(profile(GLASS_PROFILES[kind]), 40), glass, Vector3.ZERO, g)
+	if kind == "mug":
+		var copper := mat(Color(0.85, 0.48, 0.3), 0.9, 0.3)
+		add_mesh(lathe(profile(GLASS_PROFILES[kind]), 32), copper, Vector3.ZERO, g)
+		var handle := TorusMesh.new()
+		handle.inner_radius = .022
+		handle.outer_radius = .03
+		var h := add_mesh(handle, copper, Vector3(-.05, .055, 0), g)
+		h.rotation.x = PI / 2
+	else:
+		add_mesh(lathe(profile(GLASS_PROFILES[kind]), 40), glass, Vector3.ZERO, g)
 	var liq := MeshInstance3D.new()
 	liq.name = "Liquid"
 	liq.material_override = liquid_mat(Color.WHITE)
@@ -384,9 +402,9 @@ func ice_cubes(parent: Node3D, center: Vector3, half: Vector3, n: int, size := 0
 	return mi
 
 
-func lime_wheel(parent: Node3D, pos: Vector3, r := 0.024) -> MeshInstance3D:
-	var c := cyl(r, r, .006, mat(Color(0.82, 0.9, 0.45), 0.0, 0.35), pos, parent, 20)
-	cyl(r * .86, r * .86, .0065, mat(Color(0.93, 0.96, 0.75), 0.0, 0.3), Vector3.ZERO, c, 20)
+func lime_wheel(parent: Node3D, pos: Vector3, r := 0.024, rind := Color(0.82, 0.9, 0.45), flesh := Color(0.93, 0.96, 0.75)) -> MeshInstance3D:
+	var c := cyl(r, r, .006, mat(rind, 0.0, 0.35), pos, parent, 20)
+	cyl(r * .86, r * .86, .0065, mat(flesh, 0.0, 0.3), Vector3.ZERO, c, 20)
 	return c
 
 
@@ -404,9 +422,26 @@ func garnish(kind: String, parent: Node3D, pos: Vector3) -> Node3D:
 				var l := sphere(.014, mm, Vector3(_rng.randf_range(-.015, .015), _rng.randf_range(0, .035), _rng.randf_range(-.015, .015)), g)
 				l.scale = Vector3(1, .25, 1.7)
 				l.rotation = Vector3(_rng.randf_range(-.8, .8), _rng.randf() * 6, _rng.randf_range(-.6, .6))
-		"orange_twist":
-			var o := box(Vector3(.06, .004, .014), mat(Color(0.95, 0.5, 0.08), 0.0, 0.4), Vector3(.02, .005, 0), g)
+		"lemon_wheel":
+			var w := lime_wheel(g, Vector3(0.03, 0, 0), .026, Color(0.98, 0.85, 0.2), Color(1.0, 0.95, 0.6))
+			w.rotation.z = 1.3
+		"orange_wheel":
+			var w := lime_wheel(g, Vector3(0.032, 0, 0), .03, Color(0.98, 0.5, 0.08), Color(1.0, 0.7, 0.3))
+			w.rotation.z = 1.3
+		"orange_twist", "lemon_twist":
+			var col := Color(0.95, 0.5, 0.08) if kind == "orange_twist" else Color(0.98, 0.86, 0.2)
+			var o := box(Vector3(.06, .004, .014), mat(col, 0.0, 0.4), Vector3(.02, .005, 0), g)
 			o.rotation = Vector3(0.3, 0.4, 0.5)
+		"olive":
+			var pick := cyl(.0012, .0012, .09, mat(Color(0.75, 0.6, 0.4)), Vector3(0, -.02, 0), g, 6)
+			pick.rotation.z = 0.35
+			var ol := sphere(.009, mat(Color(0.42, 0.5, 0.15), 0.0, 0.25), Vector3(.005, -.035, 0), g)
+			ol.scale = Vector3(1, 1.3, 1)
+		"pineapple_wedge":
+			var wd := box(Vector3(.05, .03, .012), mat(Color(1.0, 0.86, 0.3), 0.0, 0.5), Vector3(.03, .01, 0), g)
+			wd.rotation.z = 0.3
+			var lf := box(Vector3(.008, .05, .003), mat(Color(0.2, 0.5, 0.15), 0.0, 0.5), Vector3(.05, .045, 0), g)
+			lf.rotation.z = -0.3
 		"cherry":
 			sphere(.012, mat(Color(0.55, 0.02, 0.06), 0.0, 0.1), Vector3.ZERO, g)
 			var st := cyl(.0012, .0012, .04, mat(Color(0.3, 0.15, 0.05)), Vector3(0, .025, 0), g, 6)
@@ -475,15 +510,17 @@ func _build_station() -> void:
 	box(Vector3(.16, .003, .03), mat(Color(0.9, 0.92, 0.94), 1.0, 0.15), Vector3.ZERO, k)
 	box(Vector3(.1, .016, .022), mat(Color(0.08, 0.08, 0.08)), Vector3(-.13, .004, 0), k)
 	# right board: juices, syrups, soda, tonic, bitters, espresso
-	box(Vector3(.5, .01, .38), rubber, Vector3(.76, TOP + .008, -.55))
+	box(Vector3(.62, .01, .44), rubber, Vector3(.74, TOP + .008, -.57))
 	for i in Recipes.STATION.size():
 		var id: String = Recipes.STATION[i]
-		var x := 0.56 + (i % 4) * 0.13
-		var z := -0.46 - (i / 4) * 0.17
+		var x := 0.48 + (i % 6) * 0.1
+		var z := -0.43 - (i / 6) * 0.135
 		var pos := Vector3(x, TOP + .013, z)
 		match id:
-			"soda", "tonic":
-				bottle(id, pos, self, false, .03, .2)
+			"soda", "tonic", "ginger_beer", "cola":
+				bottle(id, pos, self, false, .028, .2)
+			"sparkling":
+				bottle(id, pos, self, false, .033, .3)
 			"bitters":
 				bottle(id, pos, self, false, .022, .13)
 			"espresso":
@@ -501,8 +538,9 @@ func build_rail() -> void:
 	rail_nodes.clear()
 	var ids := Recipes.rail()
 	for k in ids.size():
-		var p := Vector3(-0.82 + k * 0.235, RAIL_Y + .003, ZF + .06)
+		var p := Vector3(-0.825 + k * 0.15, RAIL_Y + .003, ZF + .06)
 		rail_nodes[ids[k]] = bottle(ids[k], p, self, true, .036, .29)
+		rail_nodes[ids[k]].set_meta("dyn", true)
 		pickables[ids[k]] = p + Vector3(0, .15, 0)
 
 
@@ -514,7 +552,7 @@ func _build_bar_top() -> void:
 	rail.rotation.z = PI / 2
 	box(Vector3(3.6, .01, .01), emissive(Color(1.0, 0.69, 0.35), 5.0), Vector3(0, 1.075, -.84))
 	# bar mat and tools
-	box(Vector3(1.15, .008, .16), rubber, Vector3(.05, BT + .004, -.93))
+	box(Vector3(1.15, .008, .14), rubber, Vector3(.05, BT + .004, -.89))
 	var tin := make_tin()
 	tin.position = Vector3(-.42, BT + .008, -.93)
 	add_child(tin)
@@ -568,7 +606,7 @@ func _build_back_bar() -> void:
 		box(Vector3(3.0, .015, .3), shelf_glass, Vector3(0, y, z + .38))
 		box(Vector3(3.0, .006, .006), emissive(Color(1.0, 0.88, 0.69), 5.0), Vector3(0, y - .01, z + .24))
 		for i in 12:
-			var b := bottle(ids[(i * 5 + row * 3) % ids.size()], Vector3(-1.38 + i * 0.25, y + .008, z + .38), self, false, _rng.randf_range(.034, .042), _rng.randf_range(.26, .33))
+			var b := bottle(ids[(i * 5 + row * 3) % ids.size()], Vector3(-1.38 + i * 0.25, y + .008, z + .38), self, false, _rng.randf_range(.034, .042), _rng.randf_range(.26, .33), false)
 			b.rotation.y = PI
 
 
@@ -624,50 +662,105 @@ func _build_lights() -> void:
 	e.fog_density = 0.035
 	env.environment = e
 	add_child(env)
+	# Few lights and no shadows: the OpenGL renderer draws every object once per light,
+	# so this keeps tablets smooth. Glowing bulbs fake the rest.
 	var station := SpotLight3D.new()
 	station.light_color = Color(1.0, 0.89, 0.72)
-	station.light_energy = 1.3
+	station.light_energy = 1.5
 	station.spot_range = 3.6
-	station.spot_angle = 48
+	station.spot_angle = 50
 	station.spot_angle_attenuation = 0.8
-	station.shadow_enabled = true
 	add_child(station)
 	station.look_at_from_position(Vector3(.1, 2.5, .3), Vector3(0, .8, -.6))
 	for x in [-1.1, 0.0, 1.1]:
 		cyl(.003, .003, 1.0, mat(Color(0.05, 0.05, 0.05)), Vector3(x, 2.75, -1.12), self, 6)
 		cyl(.05, .13, .14, mat(Color(0.1, 0.1, 0.1), 0.6, 0.4), Vector3(x, 2.2, -1.12))
 		sphere(.04, emissive(Color(1.0, 0.76, 0.48), 3.0), Vector3(x, 2.15, -1.12))
+	for x in [-1.1, 0.0, 1.1]:
 		var p := SpotLight3D.new()
 		p.light_color = Color(1.0, 0.78, 0.54)
-		p.light_energy = 2.6
+		p.light_energy = 2.8
 		p.spot_range = 4.0
-		p.spot_angle = 52
-		p.shadow_enabled = true
+		p.spot_angle = 55
 		add_child(p)
 		p.look_at_from_position(Vector3(x, 2.14, -1.12), Vector3(x, 0, -1.1), Vector3.FORWARD)
-	for x in [-.7, 0.0, .7]:
-		var o := OmniLight3D.new()
-		o.light_color = Color(1.0, 0.72, 0.42)
-		o.light_energy = 0.35
-		o.omni_range = 1.2
-		o.position = Vector3(x, 1.04, -.82)
-		add_child(o)
-	for i in 5:
-		var o := OmniLight3D.new()
-		o.light_color = Color(1.0, 0.6, 0.31)
-		o.light_energy = 2.0
-		o.omni_range = 6.0
-		o.position = Vector3(-6 + i * 3, 2.5, -6)
-		add_child(o)
-	for x in [-1.0, 1.0]:
-		var o := OmniLight3D.new()
-		o.light_color = Color(1.0, 0.7, 0.42)
-		o.light_energy = 1.5
-		o.omni_range = 2.5
-		o.position = Vector3(x, 1.6, 1.0)
-		add_child(o)
+	var led := OmniLight3D.new()
+	led.light_color = Color(1.0, 0.72, 0.42)
+	led.light_energy = 0.5
+	led.omni_range = 1.6
+	led.position = Vector3(0, 1.04, -.82)
+	add_child(led)
+	var lounge := OmniLight3D.new()
+	lounge.light_color = Color(1.0, 0.6, 0.31)
+	lounge.light_energy = 3.0
+	lounge.omni_range = 5.5
+	lounge.position = Vector3(0, 2.6, -6.5)
+	add_child(lounge)
+	var back := OmniLight3D.new()
+	back.light_color = Color(1.0, 0.7, 0.42)
+	back.light_energy = 1.8
+	back.omni_range = 2.8
+	back.position = Vector3(0, 1.7, .9)
+	add_child(back)
 	var rp := ReflectionProbe.new()
 	rp.size = Vector3(5, 3, 4)
 	rp.position = Vector3(0, 1.3, -0.6)
 	rp.update_mode = ReflectionProbe.UPDATE_ONCE
 	add_child(rp)
+
+
+# ---------------------------------------------------------------- speed
+
+static func _mat_key(m: Material) -> String:
+	if not m is StandardMaterial3D:
+		return str(m.get_instance_id())
+	var b: StandardMaterial3D = m
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [b.albedo_color, b.metallic, b.roughness, b.emission_enabled, b.emission,
+		b.emission_energy_multiplier, b.transparency, b.albedo_texture.get_rid() if b.albedo_texture else 0,
+		b.roughness_texture.get_rid() if b.roughness_texture else 0, b.uv1_scale, b.clearcoat_enabled, b.cull_mode,
+		b.rim_enabled, b.metallic_specular, b.shading_mode]
+
+
+## Merges every fixed object of the bar into a few big meshes (one per look), so the
+## tablet draws ~40 things instead of ~900.
+func bake_static() -> void:
+	var groups := {}
+	var mats := {}
+	var inv := global_transform.affine_inverse()
+	var todo := []
+	for mi in find_children("*", "MeshInstance3D", true, false):
+		var n: Node = mi
+		var dyn := false
+		while n != self and n != null:
+			if n.has_meta("dyn"):
+				dyn = true
+				break
+			n = n.get_parent()
+		if dyn or mi.mesh == null:
+			continue
+		todo.append([mi, inv * mi.global_transform])
+	for item in todo:
+		var mi: MeshInstance3D = item[0]
+		var xf: Transform3D = item[1]
+		for si in mi.mesh.get_surface_count():
+			var m: Material = mi.material_override if mi.material_override else mi.mesh.surface_get_material(si)
+			if m == null:
+				continue
+			var z := xf.origin.z
+			var k := ("back" if z > 0.5 else ("lounge" if z < -3.0 else "bar")) + _mat_key(m)
+			if not groups.has(k):
+				var st := SurfaceTool.new()
+				st.begin(Mesh.PRIMITIVE_TRIANGLES)
+				groups[k] = st
+				mats[k] = m
+			groups[k].append_from(mi.mesh, si, xf)
+		mi.visible = false
+		mi.queue_free()
+	var am := ArrayMesh.new()
+	for k in groups:
+		groups[k].commit(am)
+		am.surface_set_material(am.get_surface_count() - 1, mats[k])
+	var out := MeshInstance3D.new()
+	out.name = "Baked"
+	out.mesh = am
+	add_child(out)
