@@ -17,6 +17,7 @@ const VIEWS := {
 	"pour": [Vector3(-.05, 1.42, -.42), Vector3(.14, 1.2, -.92), 52.0],
 	"work": [Vector3(0.05, 1.5, -.42), Vector3(0.05, 1.12, -1.0), 58.0],
 	"back": [Vector3(.1, 1.6, -.25), Vector3(0, 1.32, 1.0), 58.0],
+	"menu": [Vector3(0.25, 1.6, -1.45), Vector3(-0.15, 1.33, 0.15), 52.0], ## guest's seat, looking at your bartender
 }
 
 const C_PANEL := Color(0.06, 0.04, 0.05, 0.78)
@@ -467,8 +468,22 @@ func show_menu() -> void:
 	_end_drink(false)
 	in_shift = false
 	hud.visible = false
-	_set_view("bar", 0.8)
+	_set_view("menu", 0.8)
 	var o := _overlay()
+	var fade := TextureRect.new()
+	var gt := GradientTexture2D.new()
+	var gr := Gradient.new()
+	gr.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+	gr.colors = PackedColorArray([Color(0.03, 0.015, 0.01, 0.92), Color(0.03, 0.015, 0.01, 0.7), Color(0.03, 0.015, 0.01, 0.0)])
+	gt.gradient = gr
+	gt.fill_to = Vector2(1, 0)
+	fade.texture = gt
+	fade.stretch_mode = TextureRect.STRETCH_SCALE
+	fade.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	fade.size = Vector2(760, 720)
+	fade.custom_minimum_size = Vector2(760, 0)
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	o.add_child(fade)
 	var v := VBoxContainer.new()
 	v.set_anchors_preset(Control.PRESET_CENTER_LEFT)
 	v.position = Vector2(60, -330)
@@ -628,8 +643,8 @@ func _process(delta: float) -> void:
 	if not in_shift:
 		if overlay and not _picking:
 			# slow drift of the camera behind the menus
-			var d: Array = VIEWS["bar"]
-			var p: Vector3 = d[0] + Vector3(sin(time * 0.15) * 0.25, 0, 0)
+			var d: Array = VIEWS["menu"]
+			var p: Vector3 = d[0] + Vector3(sin(time * 0.15) * 0.08, 0, 0)
 			cam_base = Transform3D(Basis.looking_at(d[1] - p), p)
 		_apply_cam()
 		return
@@ -1506,8 +1521,18 @@ func set_bartender(model: String) -> void:
 	host = People.spawn(model, bar)
 	People.set_height(host, 1.76 if model == "david" else 1.68)
 	People.arms_down(host)
-	host.rotation.y = 0.3
-	People.place_standing(host, 0.62, -0.78)
+	# the camera looks toward +z, so screen-right is -x: stand right of the menu
+	host.rotation.y = PI - 0.4
+	People.place_standing(host, -0.6, 0.1)
+	# a soft key light so your bartender reads well on the menu (only on while not in a shift)
+	var key := SpotLight3D.new()
+	key.name = "HostLight"
+	key.light_color = Color(1.0, 0.85, 0.7)
+	key.light_energy = 3.0
+	key.spot_range = 3.0
+	key.spot_angle = 22.0
+	host.add_child(key)
+	key.look_at_from_position(Vector3(0.1, 2.3, -0.9), Vector3(-0.6, 1.45, 0.1))
 	host.visible = not in_shift
 
 

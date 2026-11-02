@@ -691,8 +691,9 @@ func _build_back_bar() -> void:
 func _build_lounge() -> void:
 	box(Vector3(20, 6, .1), mat(Color(0.16, 0.08, 0.05), 0, 0.9), Vector3(0, 3, -9))
 	var bulb := emissive(Color(1.0, 0.69, 0.35), 6.0)
-	for i in 70:
-		sphere(_rng.randf_range(.02, .045), bulb, Vector3(_rng.randf_range(-7, 7), _rng.randf_range(1.6, 3.4), _rng.randf_range(-8.5, -5)))
+	for i in 36:
+		var x := -7.0 + i * 0.4
+		sphere(.03, bulb, Vector3(x, 3.1 - 0.25 * sin(PI * fposmod(x, 2.0) / 2.0), -8.8))
 	var booth := mat(Color(0.23, 0.1, 0.07), 0.0, 0.6)
 	for i in 5:
 		var x := -5.0 + i * 2.6
