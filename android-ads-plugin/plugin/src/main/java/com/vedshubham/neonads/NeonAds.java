@@ -1,6 +1,13 @@
 package com.vedshubham.neonads;
 
 import android.app.Activity;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
+
+import java.util.Calendar;
 
 import androidx.annotation.NonNull;
 import androidx.collection.ArraySet;
@@ -175,5 +182,58 @@ public class NeonAds extends GodotPlugin {
                 loadingRewarded = false;
             }
         });
+    }
+
+    // ------------------------------------------------------------ reminders
+
+    /** Asks for permission to show notifications (Android 13+ only; older phones allow it). */
+    @UsedByGodot
+    public void requestNotificationPermission() {
+        Activity a = getActivity();
+        if (a == null || Build.VERSION.SDK_INT < 33) {
+            return;
+        }
+        if (a.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            a.runOnUiThread(() -> a.requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 7001));
+        }
+    }
+
+    /**
+     * Replaces the reminders: one a day for the next titles.length days at about [hour]:00.
+     * Called every time the game opens or goes to the background, so they stop by
+     * themselves when the player hasn't played for that many days.
+     */
+    @UsedByGodot
+    public void scheduleReminders(String[] titles, String[] bodies, int hour) {
+        Activity a = getActivity();
+        if (a == null) {
+            return;
+        }
+        Context c = a.getApplicationContext();
+        AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) {
+            return;
+        }
+        for (int day = 1; day <= 7; day++) {
+            am.cancel(reminder(c, day, "", ""));
+        }
+        for (int i = 0; i < titles.length && i < bodies.length; i++) {
+            int day = i + 1;
+            Calendar when = Calendar.getInstance();
+            when.add(Calendar.DAY_OF_YEAR, day);
+            when.set(Calendar.HOUR_OF_DAY, hour);
+            when.set(Calendar.MINUTE, 0);
+            when.set(Calendar.SECOND, 0);
+            // inexact on purpose: no special alarm permission needed, and the OS can batch it
+            am.set(AlarmManager.RTC_WAKEUP, when.getTimeInMillis(), reminder(c, day, titles[i], bodies[i]));
+        }
+    }
+
+    private PendingIntent reminder(Context c, int day, String title, String body) {
+        Intent i = new Intent(c, ReminderReceiver.class);
+        i.putExtra("day", day);
+        i.putExtra("title", title);
+        i.putExtra("body", body);
+        return PendingIntent.getBroadcast(c, 7100 + day, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 }

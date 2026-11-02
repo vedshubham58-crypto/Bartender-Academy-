@@ -13,6 +13,7 @@ var mocktail := false
 var bartender := "" ## "david" or "louise"; "" = not chosen yet
 var sound := true
 var music := true
+var asked_notify := false
 var best_score := 0 ## best shift score, for the NEW BEST! on the score card
 
 
@@ -55,6 +56,7 @@ func load_game() -> void:
 	sound = bool(data.get("sound", true))
 	music = bool(data.get("music", true))
 	best_score = int(data.get("best_score", 0))
+	asked_notify = bool(data.get("asked_notify", false))
 	bartender = str(data.get("bartender", ""))
 	if mocktail_locked():
 		mocktail = true
@@ -66,5 +68,5 @@ func save() -> void:
 		return
 	f.store_string(JSON.stringify({
 		"coins": coins, "unlocked": unlocked, "made": made, "best": best, "shifts": shifts,
-		"birth_year": birth_year, "mocktail": mocktail, "sound": sound, "music": music, "best_score": best_score, "bartender": bartender,
+		"birth_year": birth_year, "mocktail": mocktail, "sound": sound, "music": music, "best_score": best_score, "asked_notify": asked_notify, "bartender": bartender,
 	}))

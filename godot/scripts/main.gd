@@ -1329,6 +1329,10 @@ func _end_shift() -> void:
 
 
 func _shift_summary() -> void:
+	# after the first shift (not at launch) ask once if we may send daily reminders
+	if not Save.asked_notify:
+		Save.asked_notify = true
+		Ads.ask_notifications()
 	for g in guests:
 		g.order = {}
 		if g.served:
