@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 
-config/name="Bartender Academy"
+config/name="Bartender: The Cocktail Academy"
 config/description="Work behind a real bar and learn cocktails you can make for real."
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
@@ -18,8 +18,8 @@ Ads="*res://scripts/ads.gd"
 
 [display]
 
-window/size/viewport_width=1600
-window/size/viewport_height=900
+window/size/viewport_width=1280
+window/size/viewport_height=720
 window/stretch/mode="viewport"
 window/stretch/aspect="expand"
 window/handheld/orientation=0
@@ -30,7 +30,7 @@ enabled=PackedStringArray("res://addons/neon_ads/plugin.cfg")
 
 [gui]
 
-theme/custom_font="res://fonts/Exo2.ttf"
+theme/custom_font="res://fonts/ui.tres"
 
 [input_devices]
 
@@ -42,4 +42,4 @@ sensors/enable_accelerometer=true
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
-anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/msaa_3d=1

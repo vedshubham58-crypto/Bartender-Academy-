@@ -19,6 +19,7 @@ func _ready() -> void:
 		_ads.interstitial_closed.connect(_interstitial_closed)
 		_ads.rewarded_closed.connect(_rewarded_closed)
 		_ads.start(INTERSTITIAL_ID, REWARDED_ID)
+	schedule_reminders()
 
 
 ## Whether a reward video can be shown right now.
@@ -68,3 +69,40 @@ func _rewarded_closed(earned: bool) -> void:
 	_after_rewarded = Callable()
 	if f.is_valid():
 		f.call()
+
+
+# ------------------------------------------------------------------ reminders
+# The game sets its own reminder notifications on the phone (no server). One a day
+# at 7 pm for the next 3 days; they are re-set each time the game is opened or put
+# away, so a player who stops playing gets 3 reminders and then no more.
+
+const REMINDER_HOUR := 19
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_WM_CLOSE_REQUEST:
+		schedule_reminders()
+
+
+## Asks once (Android 13+) for permission to show notifications.
+func ask_notifications() -> void:
+	if _ads and _ads.has_method("requestNotificationPermission"):
+		_ads.requestNotificationPermission()
+
+
+func schedule_reminders() -> void:
+	if _ads == null or not _ads.has_method("scheduleReminders"):
+		return
+	var pool: Array = Recipes.DRINKS.slice(0, maxi(1, Save.unlocked))
+	var special: String = Recipes.drink_name(pool[randi() % pool.size()])
+	var titles := PackedStringArray([
+		"Your bar opens tonight 🍸",
+		"Guests are waiting at the bar",
+		"Your shaker misses you",
+	])
+	var bodies := PackedStringArray([
+		"Tonight's special: %s. Can you get 3 stars?" % special,
+		"Beat your best score of %d in a 90-second shift." % Save.best_score if Save.best_score > 0 else "A quick 90-second shift is waiting for you.",
+		"%d recipes are still locked. Come and learn the next one!" % maxi(0, Recipes.DRINKS.size() - Save.unlocked) if Save.unlocked < Recipes.DRINKS.size() else "Can you make every drink from memory?",
+	])
+	_ads.scheduleReminders(titles, bodies, REMINDER_HOUR)

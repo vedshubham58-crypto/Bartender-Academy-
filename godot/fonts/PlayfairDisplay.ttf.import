@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://cm2pwxccspk5c"
-path="res://.godot/imported/Exo2.ttf-97992135c4692269453c74bde8d6cee0.fontdata"
+uid="uid://cndleull5n1fq"
+path="res://.godot/imported/PlayfairDisplay.ttf-d67745a31dd18ab35444068e317a7e1c.fontdata"
 
 [deps]
 
-source_file="res://fonts/Exo2.ttf"
-dest_files=["res://.godot/imported/Exo2.ttf-97992135c4692269453c74bde8d6cee0.fontdata"]
+source_file="res://fonts/PlayfairDisplay.ttf"
+dest_files=["res://.godot/imported/PlayfairDisplay.ttf-d67745a31dd18ab35444068e317a7e1c.fontdata"]
 
 [params]
 

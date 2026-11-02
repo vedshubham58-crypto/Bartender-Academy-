@@ -1,9 +1,9 @@
 extends Node
-## Bartender Academy: the bar, the guests, the shift and all the screens.
+## Bartender: The Cocktail Academy: the bar, the guests, the shift and all the screens.
 
-const SHIFT_SECONDS := 180.0
+const SHIFT_SECONDS := 90.0 ## short shifts: one and a half minutes
 const PATIENCE := 110.0
-const POUR_RATE := 28.0 ## ml per second while holding pour
+const POUR_RATE := 22.0 ## ml per second while holding pour (slow enough to stop on the line)
 const TOP_RATE := 70.0
 const BARTENDERS := {
 	"david": {"name": "Leo", "about": "Calm, quick hands, classic black uniform."},
@@ -13,10 +13,11 @@ const SHAKE_SPOT := Vector3(0.06, 1.2, -0.95) ## the tin is held up here while s
 
 const VIEWS := {
 	"bar": [Vector3(0, 1.6, .5), Vector3(0, 1.08, -1.5), 60.0],
-	"station": [Vector3(.04, 1.6, .16), Vector3(0, .78, -.85), 60.0],
+	"station": [Vector3(.04, 1.75, .35), Vector3(0, .7, -.55), 66.0],
 	"pour": [Vector3(-.05, 1.42, -.42), Vector3(.14, 1.2, -.92), 52.0],
 	"work": [Vector3(0.05, 1.5, -.42), Vector3(0.05, 1.12, -1.0), 58.0],
 	"back": [Vector3(.1, 1.6, -.25), Vector3(0, 1.32, 1.0), 58.0],
+	"menu": [Vector3(0.25, 1.6, -1.45), Vector3(-0.15, 1.33, 0.15), 52.0], ## guest's seat, looking at your bartender
 }
 
 const C_PANEL := Color(0.06, 0.04, 0.05, 0.78)
@@ -82,9 +83,27 @@ var _reach_until := 0.0
 var _picking := false
 var _previews: Array = []
 var _reach_pos := Vector3.ZERO
+var cam_base := Transform3D() ## where the current view puts the camera; swipes look around from here
+var look_yaw := 0.0
+var look_pitch := 0.0
+var _press_pos := Vector2.ZERO
+var _dragged := false
+var pointer: Node3D ## glowing arrow over the next thing to grab
+var _carry: Node3D ## a glass or scoop the right hand is carrying
+var _pour_t0 := 0
+var host: Node3D ## the bartender standing behind the bar on the menu screen
+var tv_text: Label3D
+var _tv_slide := 0
+var _tv_next := 0.0
+var _tv_reward_at := -999.0
+var paused := false
+var _last_pause_ad := -999.0
+var title_font: FontVariation
 
 
 func _ready() -> void:
+	# use the simpler versions of the 3D people sooner (they're most of the triangles)
+	get_viewport().mesh_lod_threshold = 6.0
 	bar = Bar.new()
 	add_child(bar)
 	cam = Camera3D.new()
@@ -102,10 +121,14 @@ func _ready() -> void:
 	bar.add_child(jigger)
 	_spawn_people()
 	set_bartender(Save.bartender if Save.bartender != "" else "david")
+	tv_text = bar.build_tv()
+	title_font = FontVariation.new()
+	title_font.base_font = load("res://fonts/PlayfairDisplay.ttf")
+	title_font.variation_opentype = {2003265652: 800}
 	ui = CanvasLayer.new()
 	add_child(ui)
 	_build_hud()
-	Audio.loop("crowd", true, -14.0)
+	Audio.loop("crowd", true, -18.0)
 	if Save.birth_year == 0:
 		show_age_gate()
 	else:
@@ -137,15 +160,6 @@ func _spawn_people() -> void:
 	bar.cyl(.2, .2, .012, bar.mat(Color(0.15, 0.15, 0.15), 0.8, 0.3), h + Vector3(0, .04, 0))
 	waiter.set_meta("tray", h + Vector3(0, .047, 0))
 	guests.append({"node": waiter, "x": 1.86, "order": {}, "patience": 0.0, "phase": 0.0, "bubble": null, "served": null, "drink_t": 0.0, "waiter": true})
-	# people in the lounge behind
-	var spots := [["megan", -3.6, -6.6, -.2], ["leonard", 3.4, -6.5, .2]]
-	for sp in spots:
-		var n := People.spawn(sp[0], bar)
-		n.rotation.y = sp[3]
-		People.set_height(n, 1.72)
-		People.sit_legs(n)
-		People.arms_down(n)
-		People.place_hips(n, Vector3(sp[1], 0.55, sp[2]))
 
 
 func _head_pos(g: Dictionary) -> Vector3:
@@ -158,12 +172,24 @@ func _set_view(v: String, secs := 0.45) -> void:
 	var d: Array = VIEWS[v]
 	var target := Transform3D(Basis.looking_at(d[1] - d[0]), d[0])
 	if secs <= 0.0:
-		cam.global_transform = target
+		cam_base = target
 		cam.fov = d[2]
+		look_yaw = 0.0
+		look_pitch = 0.0
+		_apply_cam()
 		return
 	var tw := create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(cam, "global_transform", target, secs)
+	tw.tween_property(self, "cam_base", target, secs)
 	tw.tween_property(cam, "fov", d[2], secs)
+	tw.tween_property(self, "look_yaw", 0.0, secs)
+	tw.tween_property(self, "look_pitch", 0.0, secs)
+
+
+## Puts the camera at the view, turned by the player's swipes.
+func _apply_cam() -> void:
+	var b := Basis(Vector3.UP, look_yaw) * cam_base.basis
+	b = b * Basis(Vector3.RIGHT, look_pitch)
+	cam.global_transform = Transform3D(b.orthonormalized(), cam_base.origin)
 
 
 # =============================================================== HUD
@@ -239,6 +265,11 @@ func _build_hud() -> void:
 	coin_label.size = Vector2(236, 40)
 	coin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hud.add_child(coin_label)
+	var pb := _button("II", pause_shift, 26, Color(0.25, 0.2, 0.3))
+	pb.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	pb.position = Vector2(-330, 18)
+	pb.size = Vector2(70, 60)
+	hud.add_child(pb)
 	# instruction + actions at the bottom
 	hint_label = _label("", 26, Color.WHITE)
 	hint_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
@@ -397,7 +428,7 @@ func show_age_gate() -> void:
 	var t := _label("Welcome behind the bar", 40, C_GOLD)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
-	var s := _label("Bartender Academy is a bar simulation for learning cocktails.\nWhat year were you born?", 22)
+	var s := _label("Bartender: The Cocktail Academy is a bar simulation for learning cocktails.\nWhat year were you born?", 22)
 	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	s.autowrap_mode = TextServer.AUTOWRAP_WORD
 	v.add_child(s)
@@ -437,25 +468,44 @@ func show_menu() -> void:
 	_end_drink(false)
 	in_shift = false
 	hud.visible = false
-	_set_view("bar", 0.8)
+	_set_view("menu", 0.8)
 	var o := _overlay()
+	var fade := TextureRect.new()
+	var gt := GradientTexture2D.new()
+	var gr := Gradient.new()
+	gr.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+	gr.colors = PackedColorArray([Color(0.03, 0.015, 0.01, 0.92), Color(0.03, 0.015, 0.01, 0.7), Color(0.03, 0.015, 0.01, 0.0)])
+	gt.gradient = gr
+	gt.fill_to = Vector2(1, 0)
+	fade.texture = gt
+	fade.stretch_mode = TextureRect.STRETCH_SCALE
+	fade.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	fade.size = Vector2(760, 720)
+	fade.custom_minimum_size = Vector2(760, 0)
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	o.add_child(fade)
 	var v := VBoxContainer.new()
 	v.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	v.position = Vector2(80, -260)
-	v.add_theme_constant_override("separation", 16)
+	v.position = Vector2(60, -330)
+	v.add_theme_constant_override("separation", 9)
 	o.add_child(v)
-	var t := _label("BARTENDER\nACADEMY", 78, Color(1.0, 0.88, 0.7))
-	t.add_theme_color_override("font_outline_color", Color(0.7, 0.25, 0.05))
+	var t := _label("Bartender", 76, Color(1.0, 0.88, 0.7))
+	t.add_theme_font_override("font", title_font)
+	t.add_theme_color_override("font_outline_color", Color(0.45, 0.15, 0.03))
 	t.add_theme_constant_override("outline_size", 10)
 	v.add_child(t)
-	v.add_child(_label("Work the bar. Learn real cocktails.", 24, Color(1, 1, 1, 0.85)))
+	var sub := _label("THE COCKTAIL ACADEMY", 26, C_GOLD)
+	sub.add_theme_constant_override("outline_size", 6)
+	sub.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+	v.add_child(sub)
+	v.add_child(_label("Work the bar. Learn real cocktails.", 20, Color(1, 1, 1, 0.85)))
 	v.add_child(_label("● %d coins   ·   %d of %d drinks unlocked" % [Save.coins, Save.unlocked, Recipes.DRINKS.size()], 20, C_GOLD))
 	var sp := Control.new()
 	sp.custom_minimum_size = Vector2(0, 10)
 	v.add_child(sp)
-	v.add_child(_button("START SHIFT  ▶", start_shift, 32))
-	v.add_child(_button("BAR BOOK  ·  recipes", show_book, 24, Color(0.25, 0.2, 0.3)))
-	v.add_child(_button("BARTENDER: %s" % BARTENDERS.get(Save.bartender, BARTENDERS["david"]).name, show_bartender_pick, 22, Color(0.25, 0.2, 0.3)))
+	v.add_child(_button("START SHIFT  ▶", start_shift, 30))
+	v.add_child(_button("BAR BOOK  ·  recipes", show_book, 20, Color(0.25, 0.2, 0.3)))
+	v.add_child(_button("BARTENDER: %s" % BARTENDERS.get(Save.bartender, BARTENDERS["david"]).name, show_bartender_pick, 20, Color(0.25, 0.2, 0.3)))
 	var mt := "MOCKTAIL MODE: %s" % ("ON" if Save.mocktail else "OFF")
 	if Save.mocktail_locked():
 		mt += " (under 18)"
@@ -465,11 +515,18 @@ func show_menu() -> void:
 		Save.mocktail = not Save.mocktail
 		Save.save()
 		bar.build_rail()
-		show_menu(), 22, Color(0.2, 0.35, 0.25)))
-	v.add_child(_button("SOUND: %s" % ("ON" if Save.sound else "OFF"), func():
+		show_menu(), 20, Color(0.2, 0.35, 0.25)))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	v.add_child(row)
+	row.add_child(_button("SOUND: %s" % ("ON" if Save.sound else "OFF"), func():
 		Audio.set_sound(not Save.sound)
-		Audio.loop("crowd", Save.sound, -14.0)
-		show_menu(), 22, Color(0.25, 0.2, 0.3)))
+		Audio.loop("crowd", Save.sound, -18.0)
+		show_menu(), 18, Color(0.25, 0.2, 0.3)))
+	row.add_child(_button("MUSIC: %s" % ("ON" if Save.music else "OFF"), func():
+		Audio.set_music(not Save.music)
+		show_menu(), 18, Color(0.25, 0.2, 0.3)))
+	row.add_child(_button("TV  +50 ●", _watch_tv, 18, Color(0.55, 0.4, 0.1)))
 	var note := _label("A simulation for adults. Fictional brands. Please drink responsibly.", 16, Color(1, 1, 1, 0.55))
 	v.add_child(note)
 
@@ -545,7 +602,7 @@ func start_shift() -> void:
 	var go := func():
 		in_shift = true
 		shift_left = SHIFT_SECONDS
-		shift_stats = {"served": 0, "stars": 0.0, "coins": 0, "perfect": 0}
+		shift_stats = {"served": 0, "stars": 0.0, "coins": 0, "perfect": 0, "score": 0, "speedy": 0, "memory": 0, "flawless": 0, "streak": 0, "best_streak": 0}
 		hud.visible = true
 		_update_coins()
 		_set_view("bar", 0.6)
@@ -559,10 +616,7 @@ func start_shift() -> void:
 				_new_order(g, 6.0 * i)
 		_clear_actions()
 		hint_label.text = "Tap a guest's order to start making it"
-	if Save.shifts >= 1:
-		Ads.show_interstitial(go)
-	else:
-		go.call()
+	go.call()
 
 
 func _new_order(g: Dictionary, delay := 0.0) -> void:
@@ -578,6 +632,10 @@ func _new_order(g: Dictionary, delay := 0.0) -> void:
 
 func _process(delta: float) -> void:
 	time += delta
+	_update_tv()
+	if pointer:
+		pointer.get_child(0).position.y = 0.06 + 0.02 * sin(time * 6.0)
+		pointer.get_child(0).rotation.y = time * 2.0
 	_update_hands(delta)
 	for g in guests:
 		if not g.waiter:
@@ -585,9 +643,13 @@ func _process(delta: float) -> void:
 	if not in_shift:
 		if overlay and not _picking:
 			# slow drift of the camera behind the menus
-			var d: Array = VIEWS["bar"]
-			var p: Vector3 = d[0] + Vector3(sin(time * 0.15) * 0.25, 0, 0)
-			cam.global_transform = Transform3D(Basis.looking_at(d[1] - p), p)
+			var d: Array = VIEWS["menu"]
+			var p: Vector3 = d[0] + Vector3(sin(time * 0.15) * 0.08, 0, 0)
+			cam_base = Transform3D(Basis.looking_at(d[1] - p), p)
+		_apply_cam()
+		return
+	_apply_cam()
+	if paused:
 		return
 	shift_left = maxf(0.0, shift_left - delta)
 	timer_label.text = "%d:%02d" % [int(shift_left) / 60, int(shift_left) % 60]
@@ -607,7 +669,11 @@ func _process(delta: float) -> void:
 	_update_bubbles()
 	if pouring:
 		var rate := TOP_RATE if cur.step.t == "top" else POUR_RATE
-		pour_ml += rate * delta
+		# timed from the press, so a slow frame never adds a jump of extra ml
+		var prev := pour_ml
+		pour_ml = rate * (Time.get_ticks_msec() - _pour_t0) / 1000.0
+		delta = pour_ml - prev
+		delta /= rate
 		_update_meter()
 		if cur.step.t != "top":
 			bar.set_jigger(jigger, pour_ml / maxf(pour_target * 1.5, 30.0), Recipes.SOURCES[pour_src].liquid)
@@ -650,6 +716,7 @@ func _refresh_ticket() -> void:
 
 func _next_step() -> void:
 	cur.i += 1
+	_hide_pointer()
 	_clear_props()
 	_clear_actions()
 	meter.visible = false
@@ -684,6 +751,7 @@ func _next_step() -> void:
 			opts.shuffle()
 			opts = opts.slice(0, 3)
 			opts.insert(randi() % 4, s.v)
+			_show_pointer(bar.garnish_spots[s.v], Recipes.GARNISH[s.v])
 			for k in opts:
 				actions.add_child(_button(Recipes.GARNISH[k], _choose.bind("garnish", k), 22, Color(0.2, 0.35, 0.2)))
 		"pour", "top", "dash":
@@ -691,7 +759,8 @@ func _next_step() -> void:
 			expecting = "pick"
 			expect_src = Recipes.src(s.src)
 			var where := "speed rail" if Recipes.SOURCES[expect_src].kind == "rail" else "station"
-			hint_label.text = "Tap the %s in the %s" % [Recipes.SOURCES[expect_src].name, where]
+			hint_label.text = "Tap the glowing %s in the %s" % [Recipes.SOURCES[expect_src].name, where]
+			_show_pointer(bar.pickables[expect_src], Recipes.SOURCES[expect_src].name)
 		"muddle":
 			_set_view("work")
 			_taps = 0
@@ -726,11 +795,10 @@ func _next_step() -> void:
 
 func _choose(kind: String, value: String) -> void:
 	var s: Dictionary = cur.step
-	match kind:
-		"ice":
-			_reach(bar.pickables["ice"] + Vector3(0, 0.03, 0), 0.5)
-		_:
-			_reach(Bar.GLASS_SPOT + Vector3(0, 0.12, 0.03), 0.45)
+	_clear_actions()
+	_hide_pointer()
+	if kind == "rim":
+		_reach(Bar.GLASS_SPOT + Vector3(0, 0.12, 0.03), 0.45)
 	var right: String = s.v
 	var names := {"glass": Recipes.GLASSES, "rim": Recipes.RIMS, "ice": Recipes.ICE, "garnish": Recipes.GARNISH}
 	if value != right:
@@ -742,9 +810,18 @@ func _choose(kind: String, value: String) -> void:
 		Audio.play("good", -8.0)
 	match kind:
 		"glass":
+			# the hand takes the glass from the rack under the bar and sets it on the mat
 			glass_node = bar.make_glass(right)
-			glass_node.position = Bar.GLASS_SPOT
+			glass_node.position = Bar.GLASS_SPOT + Vector3(0.05, -0.32, 0.42)
 			bar.add_child(glass_node)
+			_carry = glass_node
+			var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tw.tween_property(glass_node, "position", Bar.GLASS_SPOT + Vector3(0.02, 0.12, 0.12), 0.35)
+			tw.tween_property(glass_node, "position", Bar.GLASS_SPOT, 0.25)
+			await tw.finished
+			_carry = null
+			if cur.is_empty():
+				return
 			Audio.play("clink")
 			if Recipes.uses_tin(cur.drink):
 				tin_node = bar.make_tin()
@@ -759,12 +836,90 @@ func _choose(kind: String, value: String) -> void:
 				ring.outer_radius = top[0] + .003
 				bar.add_mesh(ring, bar.mat(Color(0.97, 0.97, 0.95), 0, 0.9), Vector3(0, top[1], 0), glass_node)
 		"ice":
-			Audio.play("ice")
+			# scoop from the ice well, carry it over and tip it in
 			var into: Node3D = tin_node if tin_node else glass_node
+			var scoop := _make_scoop()
+			scoop.position = bar.pickables["ice"] + Vector3(-0.05, 0.02, 0)
+			_carry = scoop
+			var top: float = 0.18 if into == tin_node else _glass_top()
+			var over: Vector3 = into.position + Vector3(0.04, top + 0.08, 0.02)
+			var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tw.tween_property(scoop, "position:y", scoop.position.y - 0.06, 0.15)
+			tw.tween_property(scoop, "position", over, 0.4)
+			tw.tween_property(scoop, "rotation:z", 1.6, 0.18)
+			await tw.finished
+			Audio.play("ice")
+			if cur.is_empty():
+				scoop.queue_free()
+				_carry = null
+				return
 			_put_ice(into, right)
+			await get_tree().create_timer(0.2).timeout
+			scoop.queue_free()
+			_carry = null
 		"garnish":
+			# pick it from the garnish tray and drop it on the glass
+			var g := bar.garnish(right, bar, bar.garnish_spots[right])
+			_carry = g
+			var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tw.tween_property(g, "position", bar.garnish_spots[right] + Vector3(0, 0.12, 0), 0.25)
+			tw.tween_property(g, "position", glass_node.position + Vector3(0, _glass_top() + 0.06, 0), 0.35)
+			await tw.finished
+			g.queue_free()
+			_carry = null
+			if cur.is_empty():
+				return
 			bar.garnish(right, glass_node, Vector3(0, _glass_top(), 0))
-	_next_step()
+	if not cur.is_empty():
+		_next_step()
+
+
+## A glowing ring and bobbing arrow with a name tag over [param at].
+func _show_pointer(at: Vector3, label: String) -> void:
+	_hide_pointer()
+	pointer = Node3D.new()
+	pointer.position = at
+	bar.add_child(pointer)
+	var arrow := Node3D.new()
+	pointer.add_child(arrow)
+	var glow := bar.emissive(Color(0.35, 1.0, 0.55), 4.0)
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.022
+	cone.bottom_radius = 0.0
+	cone.height = 0.045
+	bar.add_mesh(cone, glow, Vector3(0, 0.02, 0), arrow)
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.042
+	ring.outer_radius = 0.05
+	bar.add_mesh(ring, glow, Vector3(0, -0.07, 0), pointer)
+	var tag := Label3D.new()
+	tag.text = label
+	tag.font_size = 48
+	tag.pixel_size = 0.0011
+	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	tag.no_depth_test = true
+	tag.modulate = Color(0.75, 1.0, 0.8)
+	tag.outline_size = 14
+	tag.outline_modulate = Color(0, 0, 0, 0.9)
+	tag.position = Vector3(0, 0.1, 0)
+	arrow.add_child(tag)
+
+
+func _hide_pointer() -> void:
+	if pointer:
+		pointer.queue_free()
+		pointer = null
+
+
+## Ice scoop held by the right hand while scooping.
+func _make_scoop() -> Node3D:
+	var s := Node3D.new()
+	bar.add_child(s)
+	var steel := bar.mat(Color(0.86, 0.88, 0.9), 1.0, 0.18)
+	bar.cyl(.035, .04, .1, steel, Vector3(0, .02, 0), s, 16)
+	var h := bar.cyl(.009, .009, .08, bar.mat(Color(0.07, 0.07, 0.07)), Vector3(-.075, .02, 0), s, 8)
+	h.rotation.z = PI / 2
+	return s
 
 
 func _glass_top() -> float:
@@ -793,12 +948,35 @@ func _put_ice(into: Node3D, kind: String) -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if not in_shift or cur.is_empty():
+	if not in_shift or paused:
 		return
-	var tap: bool = (e is InputEventScreenTouch and e.pressed) or (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT)
-	if expecting == "pick" and tap:
-		_tap_pick(e.position)
-	elif expecting == "shake" and (e is InputEventScreenDrag or (e is InputEventMouseMotion and e.button_mask & MOUSE_BUTTON_MASK_LEFT)):
+	# touches also arrive as fake mouse events on phones; use the touch ones only
+	if e is InputEventMouse:
+		return
+	var press: bool = (e is InputEventScreenTouch and e.pressed) or (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT)
+	var release: bool = (e is InputEventScreenTouch and not e.pressed) or (e is InputEventMouseButton and not e.pressed and e.button_index == MOUSE_BUTTON_LEFT)
+	var drag: bool = e is InputEventScreenDrag or (e is InputEventMouseMotion and e.button_mask & MOUSE_BUTTON_MASK_LEFT)
+	if press:
+		_press_pos = e.position
+		_dragged = false
+	# swipe to look around, except while a swipe shakes or stirs
+	if drag and expecting != "shake" and expecting != "stir" and not pouring:
+		if e.position.distance_to(_press_pos) > 14.0:
+			_dragged = true
+		if _dragged:
+			look_yaw = clampf(look_yaw - e.relative.x * 0.0035, -0.75, 0.75)
+			look_pitch = clampf(look_pitch - e.relative.y * 0.0035, -0.5, 0.45)
+		return
+	if release and not _dragged:
+		if _tv_hit(e.position):
+			_watch_tv()
+			return
+		if expecting == "pick":
+			_tap_pick(e.position)
+		return
+	if cur.is_empty():
+		return
+	if expecting == "shake" and (e is InputEventScreenDrag or (e is InputEventMouseMotion and e.button_mask & MOUSE_BUTTON_MASK_LEFT)):
 		var dy: float = e.relative.y
 		if absf(dy) > 4:
 			var dir := 1 if dy > 0 else -1
@@ -861,6 +1039,7 @@ func _tap_pick(p: Vector2) -> void:
 		return
 	Audio.play("clink", -6.0)
 	expecting = ""
+	_hide_pointer()
 	pour_src = best
 	_reach(bar.pickables[best], 0.3)
 	var s: Dictionary = cur.step
@@ -898,6 +1077,8 @@ func _start_pour_view() -> void:
 	_update_meter()
 	var hold := _button("HOLD TO POUR", func(): pass, 32)
 	hold.button_down.connect(func():
+		_pour_t0 = Time.get_ticks_msec()
+		pour_ml = 0.0
 		pouring = true
 		stream.visible = true
 		Audio.loop("pour", true, -4.0))
@@ -939,13 +1120,30 @@ func _pour_release() -> void:
 	else:
 		Audio.play("bad", -8.0)
 		show_toast("%s by %d ml" % ["Over" if err > 0 else "Under", absi(int(err))], C_RED, 44)
-	if cur.step.t != "top":
-		_add_to_vessel(pour_ml, Recipes.SOURCES[pour_src].liquid, true)
-		bar.set_jigger(jigger, 0, Color.WHITE)
 	if pour_bottle:
 		pour_bottle.queue_free()
 		pour_bottle = null
-	await get_tree().create_timer(0.7).timeout
+	if cur.step.t != "top":
+		# pick up the jigger, tip it into the tin or glass, put it back
+		var into: Node3D = tin_node if tin_node else glass_node
+		var top: float = 0.18 if into == tin_node else _glass_top()
+		_carry = jigger
+		var col: Color = Recipes.SOURCES[pour_src].liquid
+		var ml := pour_ml
+		var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(jigger, "position", into.position + Vector3(0.05, top + 0.05, 0.0), 0.3)
+		tw.tween_property(jigger, "rotation:z", 2.0, 0.18)
+		tw.tween_callback(func():
+			bar.set_jigger(jigger, 0, Color.WHITE)
+			if not cur.is_empty():
+				_add_to_vessel(ml, col, true))
+		tw.tween_interval(0.15)
+		tw.tween_property(jigger, "rotation:z", 0.0, 0.15)
+		tw.tween_property(jigger, "position", Bar.JIGGER_SPOT, 0.25)
+		await tw.finished
+		_carry = null
+	else:
+		await get_tree().create_timer(0.5).timeout
 	if not cur.is_empty():
 		_next_step()
 
@@ -958,9 +1156,16 @@ func _add_to_vessel(ml: float, color: Color, splash: bool) -> void:
 	cur.color = c
 	if splash:
 		Audio.play("clink", -14.0, 1.3)
-	if tin_node == null and glass_node:
+	if tin_node:
+		bar.set_fill(tin_node, cur.vol / 450.0, c)
+	elif glass_node:
 		var cap: float = Recipes.GLASSES[glass_node.get_meta("kind")].ml
-		bar.set_fill(glass_node, cur.vol / cap, c)
+		bar.set_fill(glass_node, _fill_look(cur.vol / cap), c)
+
+
+## Small pours look like nothing in a tall glass, so the level shows a bit higher.
+func _fill_look(f: float) -> float:
+	return minf(0.92, f * 1.6 + (0.06 if f > 0 else 0.0))
 
 
 func _muddle() -> void:
@@ -1007,7 +1212,8 @@ func _strain() -> void:
 	Audio.play("pour", -8.0)
 	tw.tween_callback(func():
 		var cap: float = Recipes.GLASSES[glass_node.get_meta("kind")].ml
-		var fill_to: float = minf(0.9, cur.vol * 1.2 / cap)
+		var fill_to: float = _fill_look(cur.vol * 1.1 / cap)
+		bar.set_fill(tin_node, 0.0, cur.color)
 		var t2 := create_tween()
 		t2.tween_method(func(f): bar.set_fill(glass_node, f, cur.color), 0.0, fill_to, 0.6))
 	tw.tween_interval(0.7)
@@ -1036,6 +1242,29 @@ func _serve() -> void:
 	var secs: float = time - cur.start
 	var mood: float = clampf(g.patience / PATIENCE, 0.0, 1.0)
 	var tip: int = int(round(d.price * (0.5 + 0.5 * stars / 3.0) * (0.75 + 0.25 * mood))) + cur.perfect * 5 + (10 if secs < 35 else 0)
+	# little wins for this drink, shown under the stars and counted on the score card
+	var badges := []
+	var score: int = int(stars * 100) + cur.perfect * 25
+	if secs < 30.0:
+		badges.append("SPEEDY")
+		shift_stats.speedy += 1
+		score += 50
+	if cur.perfect > 0 and cur.perfect == cur.errs.size():
+		badges.append("PERFECT POUR" + ("S" if cur.perfect > 1 else ""))
+	if not _hint_on() and cur.mistakes == 0:
+		badges.append("FROM MEMORY")
+		shift_stats.memory += 1
+		score += 50
+	if stars >= 3.0:
+		shift_stats.flawless += 1
+		shift_stats.streak += 1
+		shift_stats.best_streak = maxi(shift_stats.best_streak, shift_stats.streak)
+		if shift_stats.streak >= 2:
+			badges.append("x%d STREAK" % shift_stats.streak)
+			tip += 5 * shift_stats.streak
+			score += 30 * shift_stats.streak
+	else:
+		shift_stats.streak = 0
 	Save.coins += tip
 	Save.record(d.id, stars)
 	Save.save()
@@ -1043,6 +1272,7 @@ func _serve() -> void:
 	shift_stats.stars += stars
 	shift_stats.coins += tip
 	shift_stats.perfect += cur.perfect
+	shift_stats.score += score
 	_update_coins()
 	var dest: Vector3 = g.node.get_meta("tray") if g.waiter else Vector3(g.x - .16, Bar.BT + .008, Bar.BZ1 + .2)
 	var gl := glass_node
@@ -1054,7 +1284,10 @@ func _serve() -> void:
 	tw.tween_callback(func():
 		_serving = null
 		Audio.play("tip")
-		show_toast("%s   +%d" % ["★".repeat(int(floor(stars))) + ("½" if fmod(stars, 1.0) >= 0.5 else ""), tip], C_GOLD, 60))
+		var line := "%s   +%d" % ["★".repeat(int(floor(stars))) + ("½" if fmod(stars, 1.0) >= 0.5 else ""), tip]
+		if not badges.is_empty():
+			line += "\n" + "  ·  ".join(badges)
+		show_toast(line, C_GOLD, 52 if badges.is_empty() else 44))
 	g.order = {}
 	g.served = gl
 	g.drink_t = 4.0 if g.waiter else randf_range(12.0, 18.0)
@@ -1091,6 +1324,15 @@ func _end_drink(keep_glass: bool) -> void:
 func _end_shift() -> void:
 	in_shift = false
 	_end_drink(false)
+	hud.visible = false
+	Ads.show_interstitial(_shift_summary)
+
+
+func _shift_summary() -> void:
+	# after the first shift (not at launch) ask once if we may send daily reminders
+	if not Save.asked_notify:
+		Save.asked_notify = true
+		Ads.ask_notifications()
 	for g in guests:
 		g.order = {}
 		if g.served:
@@ -1107,22 +1349,62 @@ func _end_shift() -> void:
 				Save.unlocked += 1
 				names.append(Recipes.drink_name(Recipes.DRINKS[Save.unlocked - 1]))
 		unlocked = " & ".join(names)
+	var new_best: bool = shift_stats.score > Save.best_score and shift_stats.score > 0
+	if new_best:
+		Save.best_score = shift_stats.score
 	Save.save()
 	hud.visible = false
-	var v := _center_box(_overlay(), 680)
-	var t := _label("SHIFT OVER", 52, C_GOLD)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
+	var v := _center_box(_overlay(), 760)
+	v.add_theme_constant_override("separation", 8)
 	var avg: float = shift_stats.stars / maxf(1, shift_stats.served)
-	for line in [
-		"Drinks served: %d" % shift_stats.served,
-		"Average: %.1f ★" % avg,
-		"Perfect pours: %d" % shift_stats.perfect,
-		"Tips: ● %d" % shift_stats.coins,
+	# grade from the average stars and how many drinks went out
+	var grade := "C"
+	if shift_stats.served >= 3 and avg >= 2.8:
+		grade = "S"
+	elif shift_stats.served >= 2 and avg >= 2.4:
+		grade = "A"
+	elif shift_stats.served >= 1 and avg >= 1.8:
+		grade = "B"
+	var head := HBoxContainer.new()
+	head.alignment = BoxContainer.ALIGNMENT_CENTER
+	head.add_theme_constant_override("separation", 24)
+	v.add_child(head)
+	var g := _label(grade, 96, {"S": Color(1.0, 0.8, 0.3), "A": C_GREEN, "B": Color(0.6, 0.8, 1.0), "C": Color(1, 1, 1, 0.8)}[grade])
+	g.add_theme_font_override("font", title_font)
+	g.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+	g.add_theme_constant_override("outline_size", 10)
+	head.add_child(g)
+	var hv := VBoxContainer.new()
+	head.add_child(hv)
+	hv.add_child(_label("SHIFT SCORE CARD", 26, C_GOLD))
+	var score_l := _label("0", 56, Color.WHITE)
+	hv.add_child(score_l)
+	var tw := create_tween()
+	tw.tween_method(func(x: float): score_l.text = "%d" % int(x), 0.0, float(shift_stats.score), 1.2).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	var best_l := _label("NEW BEST!" if new_best else "Best: %d" % Save.best_score, 22, C_GREEN if new_best else Color(1, 1, 1, 0.6))
+	hv.add_child(best_l)
+	if new_best:
+		best_l.pivot_offset = Vector2(60, 14)
+		var pulse := create_tween().set_loops(4)
+		pulse.tween_property(best_l, "scale", Vector2(1.2, 1.2), 0.25)
+		pulse.tween_property(best_l, "scale", Vector2.ONE, 0.25)
+		Audio.play("good", -4.0)
+	var stats := GridContainer.new()
+	stats.columns = 2
+	stats.add_theme_constant_override("h_separation", 40)
+	v.add_child(stats)
+	for pair in [
+		["Drinks served", "%d" % shift_stats.served],
+		["Average", "%.1f ★" % avg],
+		["Perfect pours", "%d" % shift_stats.perfect],
+		["Speedy drinks", "%d" % shift_stats.speedy],
+		["From memory", "%d" % shift_stats.memory],
+		["Best 3-star streak", "%d" % shift_stats.best_streak],
+		["Tips", "● %d" % shift_stats.coins],
 	]:
-		var l := _label(line, 28)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		v.add_child(l)
+		stats.add_child(_label(pair[0], 22, Color(1, 1, 1, 0.75)))
+		var val := _label(pair[1], 22, C_GOLD)
+		stats.add_child(val)
 	if unlocked != "":
 		var u := _label("New recipes unlocked: %s" % unlocked, 26, C_GREEN)
 		u.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1138,6 +1420,87 @@ func _end_shift() -> void:
 	row.add_child(_button("Bar Book", show_book, 22, Color(0.25, 0.2, 0.3)))
 	row.add_child(_button("Menu", show_menu, 22, Color(0.25, 0.2, 0.3)))
 	v.add_child(row)
+
+
+func pause_shift() -> void:
+	if not in_shift or paused:
+		return
+	paused = true
+	pouring = false
+	Audio.loop("pour", false)
+	Audio.loop("shake", false)
+	hud.visible = false
+	var v := _center_box(_overlay(), 520)
+	var t := _label("PAUSED", 52, C_GOLD)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	v.add_child(_button("RESUME  ▶", _resume_shift, 32))
+	v.add_child(_button("Quit to menu", func():
+		paused = false
+		_end_drink(false)
+		for g in guests:
+			g.order = {}
+			if g.bubble:
+				g.bubble.visible = false
+		show_menu(), 22, Color(0.25, 0.2, 0.3)))
+	# a full-screen ad when pausing, at most every 2 minutes
+	if time - _last_pause_ad > 120.0:
+		_last_pause_ad = time
+		Ads.show_interstitial(func(): pass)
+
+
+func _resume_shift() -> void:
+	_close_overlay()
+	paused = false
+	hud.visible = true
+
+
+# =============================================================== TV
+
+const TV_SLIDES := [
+	"TONIGHT'S SPECIAL\n%s",
+	"TAP THE TV\nWatch a short video, get ● 50",
+	"DID YOU KNOW?\nShake drinks with juice, stir drinks that are all spirits",
+	"BARTENDER\nThe Cocktail Academy",
+]
+
+
+func _update_tv() -> void:
+	if tv_text == null or time < _tv_next:
+		return
+	_tv_next = time + 6.0
+	_tv_slide = (_tv_slide + 1) % TV_SLIDES.size()
+	var t: String = TV_SLIDES[_tv_slide]
+	if "%s" in t:
+		var pool: Array = Recipes.DRINKS.slice(0, maxi(1, Save.unlocked))
+		t = t % Recipes.drink_name(pool[int(time / 60.0) % pool.size()])
+	tv_text.text = t
+
+
+func _tv_hit(p: Vector2) -> bool:
+	if tv_text == null:
+		return false
+	var c := tv_text.global_position
+	if cam.is_position_behind(c):
+		return false
+	var a := cam.unproject_position(c + Vector3(-0.64, 0.36, 0))
+	var b := cam.unproject_position(c + Vector3(0.64, -0.36, 0))
+	return Rect2(a, b - a).abs().has_point(p)
+
+
+func _watch_tv() -> void:
+	if time - _tv_reward_at < 60.0:
+		show_toast("The TV has a new video in a minute", Color(1, 1, 1), 34)
+		return
+	if not Ads.rewarded_ready():
+		show_toast("No video right now, try again soon", Color(1, 1, 1), 34)
+		return
+	_tv_reward_at = time
+	Ads.show_rewarded(func():
+		Save.coins += 50
+		Save.save()
+		_update_coins()
+		show_toast("+50 coins from the TV!", C_GOLD))
 
 
 func _double_tips(btn: Button) -> void:
@@ -1156,6 +1519,25 @@ func set_bartender(model: String) -> void:
 	if me:
 		me.free_body()
 	me = FirstPerson.new(model, bar)
+	if host:
+		host.queue_free()
+	# on the menu you see your bartender behind the bar, turned toward you
+	host = People.spawn(model, bar)
+	People.set_height(host, 1.76 if model == "david" else 1.68)
+	People.arms_down(host)
+	# the camera looks toward +z, so screen-right is -x: stand right of the menu
+	host.rotation.y = PI - 0.4
+	People.place_standing(host, -0.6, 0.1)
+	# a soft key light so your bartender reads well on the menu (only on while not in a shift)
+	var key := SpotLight3D.new()
+	key.name = "HostLight"
+	key.light_color = Color(1.0, 0.85, 0.7)
+	key.light_energy = 3.0
+	key.spot_range = 3.0
+	key.spot_angle = 22.0
+	host.add_child(key)
+	key.look_at_from_position(Vector3(0.1, 2.3, -0.9), Vector3(-0.6, 1.45, 0.1))
+	host.visible = not in_shift
 
 
 func _reach(p: Vector3, secs := 0.4) -> void:
@@ -1224,8 +1606,17 @@ func _update_hands(delta: float) -> void:
 	var ld := Vector3.ZERO
 	var rt := Vector3.UP
 	var lt := Vector3.UP
+	# hidden while picking a bottle, so the body never covers the speed rail
+	me.node.visible = in_shift and expecting != "pick"
+	if host:
+		host.visible = not in_shift and not _picking
 	if in_shift and not cur.is_empty():
-		if _serving:
+		if _carry:
+			r = _carry.global_position + Vector3(0, 0.05, 0) - fwd * 0.045
+			rg = 0.8
+			rd = fwd
+			rt = Vector3.UP
+		elif _serving:
 			r = _serving.position + Vector3(0.02, 0.07, 0.05)
 			rg = 0.45
 			rd = fwd

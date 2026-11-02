@@ -1,6 +1,6 @@
 extends Node
 ## Plays whole drinks automatically through the real game code and saves screenshots.
-## Run: godot --path . --rendering-method gl_compatibility --resolution 1600x900 res://tests/app_test.tscn -- /tmp/shots/a
+## Run: godot --path . --rendering-method gl_compatibility --resolution 1280x720 res://tests/app_test.tscn -- /tmp/shots/a
 
 var main: Node
 var out := "/tmp/shots/a"
@@ -72,7 +72,7 @@ func make(gi: int, shots: bool) -> void:
 				if shots and s.t == "glass":
 					await _secs(0.5)
 					await shot(id + "_glass")
-				main._choose(s.t, s.v)
+				await main._choose(s.t, s.v)
 			"pour", "top", "dash":
 				await _secs(0.5)
 				var src: String = main.expect_src
@@ -94,14 +94,15 @@ func make(gi: int, shots: bool) -> void:
 					for n in s.n:
 						main._dash()
 				else:
+					main._pour_t0 = Time.get_ticks_msec()
 					main.pouring = true
 					main.stream.visible = true
 					while main.pour_ml < main.pour_target - 0.5:
 						await get_tree().process_frame
 					if shots:
 						await shot("%s_%d_pour" % [id, i])
-					main._pour_release()
-					await _secs(0.9)
+					await main._pour_release()
+					await _frames(2)
 			"muddle":
 				for n in 6:
 					main._muddle()
@@ -116,9 +117,9 @@ func make(gi: int, shots: bool) -> void:
 					if shots and n == 8:
 						await shot(id + "_shake")
 			"stir":
-				var ev := InputEventMouseMotion.new()
+				var ev := InputEventScreenDrag.new()
 				ev.relative = Vector2(80, 60)
-				ev.button_mask = MOUSE_BUTTON_MASK_LEFT
+				ev.position = Vector2(640, 400)
 				await _secs(0.6)
 				for n in 40:
 					if main.expecting != "stir":
