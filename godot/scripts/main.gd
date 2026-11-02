@@ -619,7 +619,7 @@ func show_book() -> void:
 
 func start_shift() -> void:
 	_close_overlay()
-	Ads.hide_banner()
+	Ads.show_banner(true)
 	var go := func():
 		in_shift = true
 		shift_left = SHIFT_SECONDS

@@ -26,11 +26,12 @@ func _ready() -> void:
 var banner_on := false
 
 
-## A small banner ad at the bottom edge (menu and score card only, never during a shift).
-func show_banner() -> void:
+## A small banner ad: along the bottom on the menu and score card, along the top
+## edge during a shift (where it covers only sky, not the bar).
+func show_banner(top := false) -> void:
 	banner_on = true
 	if _ads and _ads.has_method("showBanner"):
-		_ads.showBanner(BANNER_ID, false)
+		_ads.showBanner(BANNER_ID, top)
 
 
 func hide_banner() -> void:

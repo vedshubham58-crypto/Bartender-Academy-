@@ -772,30 +772,98 @@ func _build_skyline() -> void:
 	box(Vector3(6000, 1, 6000), streets, Vector3(0, ground, -1000))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 21
+	# three window looks so the towers don't all match: warm offices, blue glass, mixed
+	var wins: Array[StandardMaterial3D] = [win]
+	for tint in [Color(0.8, 1.15, 1.6), Color(1.6, 1.25, 0.9)]:
+		var m: StandardMaterial3D = win.duplicate()
+		m.albedo_color = tint
+		wins.append(m)
+	var low: StandardMaterial3D = win.duplicate()
+	low.albedo_color = Color(0.9, 0.8, 0.75)
+	var crowns: Array[StandardMaterial3D] = []
+	for c in [Color(0.2, 0.8, 1.0), Color(1.0, 0.25, 0.7), Color(1.0, 0.65, 0.2), Color(0.6, 0.35, 1.0)]:
+		crowns.append(emissive(c, 1.3))
+	var beacon := emissive(Color(1, .1, .05), 6.0)
 	# office towers all around the terrace, thickest in front where the guests look
-	for i in 240:
-		var ang := rng.randf_range(-1.4, 1.4) if i < 180 else rng.randf_range(1.4, TAU - 1.4)
+	for i in 260:
+		var ang := rng.randf_range(-1.4, 1.4) if i < 200 else rng.randf_range(1.4, TAU - 1.4)
 		var dist := rng.randf_range(520.0, 2300.0)
 		var p := Vector3(sin(ang) * dist, 0, -cos(ang) * dist - 10.0)
-		var h := rng.randf_range(60.0, 200.0) * (1.8 if rng.randf() < 0.15 else 1.0)
+		if p.x > 900.0 and p.z < -900.0:
+			continue # that's the sea
+		# a downtown cluster near the big spire is taller
+		var downtown := p.distance_to(Vector3(-650, 0, -1700)) < 600.0
+		if absf(ang - atan2(-650.0, 1690.0)) < 0.06 and dist < 1650.0:
+			continue # keep the view of the big spire clear
+		var near := dist < 1100.0 and absf(ang) < 0.9 # right in front of the bar: keep the sky open
+		var h := rng.randf_range(60.0, 150.0 if near else 200.0) * (1.8 if rng.randf() < (0.4 if downtown else (0.0 if near else 0.12)) else 1.0)
 		var w := rng.randf_range(30.0, 60.0)
 		var d := rng.randf_range(30.0, 60.0)
+		var wm: StandardMaterial3D = wins[rng.randi() % wins.size()]
+		var top := ground + h
 		if rng.randf() < 0.25:
-			cyl(w * .5, w * .5, h, win, Vector3(p.x, ground + h * .5, p.z), self, 12)
+			cyl(w * .5, w * .5, h, wm, Vector3(p.x, ground + h * .5, p.z), self, 12)
 		else:
-			box(Vector3(w, h, d), win, Vector3(p.x, ground + h * .5, p.z))
-		box(Vector3(w * .7, 2, d * .7), dark, Vector3(p.x, ground + h + 1, p.z))
+			box(Vector3(w, h, d), wm, Vector3(p.x, ground + h * .5, p.z))
+			if rng.randf() < 0.35:
+				# a stepped top
+				var h2 := h * rng.randf_range(0.15, 0.3)
+				box(Vector3(w * .65, h2, d * .65), wm, Vector3(p.x, top + h2 * .5, p.z))
+				top += h2
+		if h > 140.0 and rng.randf() < 0.55:
+			# a glowing crown band, like the lit tops of real towers at night
+			box(Vector3(w * 1.02, 4.0, d * 1.02), crowns[rng.randi() % crowns.size()], Vector3(p.x, top - 6.0, p.z))
+		box(Vector3(w * .7, 2, d * .7), dark, Vector3(p.x, top + 1, p.z))
+		if h > 150.0:
+			sphere(2.0, beacon, Vector3(p.x, top + 3, p.z))
 		if h > 250.0:
-			cyl(.8, 1.5, 40, dark, Vector3(p.x, ground + h + 20, p.z), self, 6)
-			sphere(3.0, emissive(Color(1, .1, .05), 6.0), Vector3(p.x, ground + h + 41, p.z))
+			cyl(.8, 1.5, 40, dark, Vector3(p.x, top + 20, p.z), self, 6)
+			sphere(3.0, beacon, Vector3(p.x, top + 41, p.z))
+	# low-rise blocks fill the ground between the towers
+	for i in 420:
+		var ang := rng.randf_range(-PI, PI)
+		var dist := rng.randf_range(300.0, 2600.0)
+		var p := Vector3(sin(ang) * dist, 0, -cos(ang) * dist - 10.0)
+		if p.x > 900.0 and p.z < -900.0:
+			continue
+		var h := rng.randf_range(8.0, 35.0)
+		box(Vector3(rng.randf_range(25, 70), h, rng.randf_range(25, 70)), low, Vector3(p.x, ground + h * .5, p.z))
+	# a wide boulevard of street lights running to the downtown spire
+	var road := emissive(Color(1.0, 0.55, 0.2), 1.0)
+	var to := Vector3(-650, 0, -1700)
+	var seg := box(Vector3(10, 1.2, to.length()), road, Vector3(to.x * .5, ground + 1, to.z * .5))
+	seg.rotation.y = atan2(to.x, to.z)
+	var tail := emissive(Color(1.0, 0.2, 0.15), 1.0)
+	var seg2 := box(Vector3(5, 1.2, to.length()), tail, Vector3(to.x * .5 + 14, ground + 1, to.z * .5))
+	seg2.rotation.y = seg.rotation.y
+	# the sea off to the right, with the moon's path shining on it
+	var sea := mat(Color(0.02, 0.03, 0.07), 0.0, 1.0)
+	sea.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	box(Vector3(3000, 1, 3000), sea, Vector3(2400, ground + 1.0, -2400))
+	var glint := emissive(Color(1.0, 0.9, 0.75), 1.2)
+	for k in 40:
+		var t := 0.15 + k * 0.021
+		var q := Vector3(900, 0, -2600) * t + Vector3(rng.randf_range(-30, 30), 0, 0)
+		if q.x > 900.0 and q.z < -900.0:
+			box(Vector3(rng.randf_range(20, 70) * t * 1.5, .5, 3.0 + 6.0 * t), glint, Vector3(q.x, ground + 2.0, q.z))
 	_build_spire(Vector3(-650, ground, -1700), win, dark)
-	# a big pale moon
-	sphere(40.0, emissive(Color(1.0, 0.92, 0.8), 1.4), Vector3(900, 520, -2600))
+	# a big pale moon and a scatter of stars
+	var moon := emissive(Color(1.0, 0.92, 0.8), 1.4)
+	moon.disable_fog = true
+	sphere(40.0, moon, Vector3(900, 520, -2600))
+	var star := emissive(Color(1, 1, 1), 1.5)
+	star.disable_fog = true
+	for k in 160:
+		var az := rng.randf_range(-PI, PI)
+		var el := rng.randf_range(0.18, 1.2)
+		var dir := Vector3(sin(az) * cos(el), sin(el), -cos(az) * cos(el))
+		var sz := rng.randf_range(3.0, 6.0)
+		box(Vector3(sz, sz, sz), star, dir * 3200.0)
 
 
 ## One supertall tower that steps in as it rises, ending in a long needle.
 func _build_spire(base: Vector3, win: Material, dark: Material) -> void:
-	var edge := emissive(Color(0.75, 0.85, 1.0), 2.2)
+	var edge := emissive(Color(0.8, 0.9, 1.0), 4.0)
 	var y := 0.0
 	var tiers := [[150.0, 70.0], [130.0, 58.0], [110.0, 47.0], [95.0, 37.0], [80.0, 28.0], [60.0, 20.0], [45.0, 13.0]]
 	for ti in tiers.size():
@@ -909,8 +977,8 @@ func _build_lights() -> void:
 	add_child(led)
 	var lounge := OmniLight3D.new()
 	lounge.light_color = Color(1.0, 0.6, 0.31)
-	lounge.light_energy = 3.0
-	lounge.omni_range = 5.5
+	lounge.light_energy = 3.6
+	lounge.omni_range = 7.0
 	lounge.position = Vector3(0, 2.6, -6.5)
 	add_child(lounge)
 	var back := OmniLight3D.new()
