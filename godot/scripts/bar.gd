@@ -23,6 +23,8 @@ const ICE_SPOT := Vector3(0.0, TOP, -0.55)
 
 ## Things the player can tap: id -> world position (rail bottles, station items, ice well).
 var pickables := {}
+var theme_lights: Array[Light3D] = [] ## the lights a bar light theme recolours
+var _theme_base := {} ## light -> its normal colour
 var garnish_spots := {} ## garnish kind -> its compartment in the garnish tray
 var rail_nodes := {}
 
@@ -363,7 +365,13 @@ func set_fill(g: Node3D, fill: float, color: Color) -> void:
 func make_tin() -> Node3D:
 	var g := Node3D.new()
 	g.set_meta("kind", "tin")
-	add_mesh(lathe(profile([[0, 0], [.035, 0], [.036, .003], [.045, .17], [.0455, .173]]), 32), mat(Color(0.82, 0.84, 0.86), 0.8, 0.2), Vector3.ZERO, g)
+	var steel := mat(Color(0.82, 0.84, 0.86), 0.8, 0.2)
+	add_mesh(lathe(profile([[0, 0], [.035, 0], [.036, .003], [.045, .17], [.0455, .173]]), 32), steel, Vector3.ZERO, g)
+	# the small tin that caps it while shaking (upside down, sealed in the big one)
+	var lid := add_mesh(lathe(profile([[0, 0], [.03, 0], [.031, .003], [.041, .12], [.0415, .122]]), 24), steel, Vector3(0, .25, 0), g)
+	lid.name = "Lid"
+	lid.rotation.x = PI
+	lid.visible = false
 	var liq := MeshInstance3D.new()
 	liq.name = "Liquid"
 	liq.material_override = liquid_mat(Color.WHITE)
@@ -382,6 +390,43 @@ func make_jigger() -> Node3D:
 	liq.material_override = liquid_mat(Color.WHITE)
 	g.add_child(liq)
 	return g
+
+
+## Bar tools look (shop item): "steel", "copper", "gold" or "black".
+const TOOL_SKINS := {
+	"steel": [Color(0.82, 0.84, 0.86), 0.8, 0.2],
+	"copper": [Color(0.86, 0.5, 0.32), 0.9, 0.25],
+	"gold": [Color(1.0, 0.78, 0.36), 1.0, 0.18],
+	"black": [Color(0.09, 0.09, 0.1), 0.7, 0.3],
+}
+
+
+func skin_tool(node: Node3D, skin: String) -> void:
+	var d: Array = TOOL_SKINS.get(skin, TOOL_SKINS["steel"])
+	var m := mat(d[0], d[1], d[2])
+	for mi in node.find_children("*", "MeshInstance3D", true, false):
+		if mi.name != "Liquid":
+			mi.material_override = m
+
+
+## Bar light theme (shop item): tints the bar's lamps.
+const LIGHT_THEMES := {
+	"warm": Color(1, 1, 1),
+	"blue": Color(0.45, 0.7, 1.25),
+	"pink": Color(1.2, 0.5, 0.95),
+	"gold": Color(1.25, 1.0, 0.55),
+}
+
+
+func set_light_theme(theme: String) -> void:
+	var tint: Color = LIGHT_THEMES.get(theme, LIGHT_THEMES["warm"])
+	for l in theme_lights:
+		if not _theme_base.has(l):
+			_theme_base[l] = [l.light_color, l.light_energy]
+		var base: Array = _theme_base[l]
+		var c: Color = base[0]
+		l.light_color = Color(c.r * tint.r, c.g * tint.g, c.b * tint.b).clamp(Color(0, 0, 0), Color(1, 1, 1))
+		l.light_energy = base[1] * (1.15 if theme != "warm" else 1.0)
 
 
 ## Jigger fill 0..1 of its 30 ml cup... we show up to 60 ml by scaling the cup.
@@ -956,6 +1001,7 @@ func _build_lights() -> void:
 	station.spot_angle = 50
 	station.spot_angle_attenuation = 0.8
 	add_child(station)
+	theme_lights.append(station)
 	station.look_at_from_position(Vector3(.1, 2.5, .3), Vector3(0, .8, -.6))
 	for x in [-1.1, 0.0, 1.1]:
 		cyl(.003, .003, 1.0, mat(Color(0.05, 0.05, 0.05)), Vector3(x, 2.75, -1.12), self, 6)
@@ -968,6 +1014,7 @@ func _build_lights() -> void:
 		p.spot_range = 4.0
 		p.spot_angle = 55
 		add_child(p)
+		theme_lights.append(p)
 		p.look_at_from_position(Vector3(x, 2.14, -1.12), Vector3(x, 0, -1.1), Vector3.FORWARD)
 	var led := OmniLight3D.new()
 	led.light_color = Color(1.0, 0.72, 0.42)
@@ -975,6 +1022,7 @@ func _build_lights() -> void:
 	led.omni_range = 1.6
 	led.position = Vector3(0, 1.04, -.82)
 	add_child(led)
+	theme_lights.append(led)
 	var lounge := OmniLight3D.new()
 	lounge.light_color = Color(1.0, 0.6, 0.31)
 	lounge.light_energy = 3.6
@@ -987,6 +1035,7 @@ func _build_lights() -> void:
 	back.omni_range = 2.8
 	back.position = Vector3(0, 1.7, .9)
 	add_child(back)
+	theme_lights.append(back)
 	var rp := ReflectionProbe.new()
 	rp.size = Vector3(5, 3, 4)
 	rp.position = Vector3(0, 1.3, -0.6)

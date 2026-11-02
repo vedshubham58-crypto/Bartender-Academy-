@@ -54,6 +54,18 @@ func _ready() -> void:
 	main.shift_left = 0.0
 	await _secs(1.0)
 	await shot("summary")
+	main._score_card("", false)
+	await _secs(1.5)
+	await shot("scorecard")
+	Save.coins = maxi(Save.coins, 1000)
+	main.show_shop()
+	await _frames(10)
+	await shot("shop")
+	main._shop_buy("tools_gold", 900)
+	main._shop_buy("lights_pink", 500)
+	main.show_menu()
+	await _secs(1.2)
+	await shot("menu2")
 	print("APP TEST DONE, fails=%d coins=%d" % [fails, Save.coins])
 	get_tree().quit(1 if fails > 0 else 0)
 

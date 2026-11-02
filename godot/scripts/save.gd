@@ -15,6 +15,10 @@ var sound := true
 var music := true
 var asked_notify := false
 var best_score := 0 ## best shift score, for the NEW BEST! on the score card
+var owned: Array = ["tools_steel", "lights_warm"] ## shop items bought
+var tool_skin := "steel"
+var light_theme := "warm"
+var boosts := {} ## one-shift boosts waiting: "patience" / "tips" -> true
 
 
 func _ready() -> void:
@@ -58,6 +62,10 @@ func load_game() -> void:
 	best_score = int(data.get("best_score", 0))
 	asked_notify = bool(data.get("asked_notify", false))
 	bartender = str(data.get("bartender", ""))
+	owned = data.get("owned", owned)
+	tool_skin = str(data.get("tool_skin", "steel"))
+	light_theme = str(data.get("light_theme", "warm"))
+	boosts = data.get("boosts", {})
 	if mocktail_locked():
 		mocktail = true
 
@@ -69,4 +77,5 @@ func save() -> void:
 	f.store_string(JSON.stringify({
 		"coins": coins, "unlocked": unlocked, "made": made, "best": best, "shifts": shifts,
 		"birth_year": birth_year, "mocktail": mocktail, "sound": sound, "music": music, "best_score": best_score, "asked_notify": asked_notify, "bartender": bartender,
+		"owned": owned, "tool_skin": tool_skin, "light_theme": light_theme, "boosts": boosts,
 	}))
