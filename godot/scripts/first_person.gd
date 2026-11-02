@@ -57,7 +57,7 @@ func update(cam: Camera3D, dt: float) -> void:
 	# neck just under the camera, a little in front, so the shoulders can reach the station
 	var want := cam.global_position + fwd * 0.1 + Vector3.DOWN * 0.3
 	node.global_position += want - People.world_pos(s, "Neck")
-	var k := 1.0 - exp(-dt * 12.0)
+	var k := 1.0 - exp(-dt * 20.0)
 	for side in ["Right", "Left"]:
 		var t: Vector3 = target[side]
 		if t == Vector3.INF:
