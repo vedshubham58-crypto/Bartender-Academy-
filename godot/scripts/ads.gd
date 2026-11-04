@@ -30,13 +30,14 @@ var banner_on := false
 ## edge during a shift (where it covers only sky, not the bar).
 func show_banner(top := false) -> void:
 	banner_on = true
-	if _ads and _ads.has_method("showBanner"):
+	# (no has_method check: Android plugin methods don't show up in has_method)
+	if _ads:
 		_ads.showBanner(BANNER_ID, top)
 
 
 func hide_banner() -> void:
 	banner_on = false
-	if _ads and _ads.has_method("hideBanner"):
+	if _ads:
 		_ads.hideBanner()
 
 
@@ -104,12 +105,12 @@ func _notification(what: int) -> void:
 
 ## Asks once (Android 13+) for permission to show notifications.
 func ask_notifications() -> void:
-	if _ads and _ads.has_method("requestNotificationPermission"):
+	if _ads:
 		_ads.requestNotificationPermission()
 
 
 func schedule_reminders() -> void:
-	if _ads == null or not _ads.has_method("scheduleReminders"):
+	if _ads == null:
 		return
 	var pool: Array = Recipes.DRINKS.slice(0, maxi(1, Save.unlocked))
 	var special: String = Recipes.drink_name(pool[randi() % pool.size()])
