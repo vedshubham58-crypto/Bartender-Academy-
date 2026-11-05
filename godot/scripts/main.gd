@@ -562,8 +562,17 @@ func show_menu() -> void:
 		Audio.set_music(not Save.music)
 		show_menu(), 18, Color(0.25, 0.2, 0.3)))
 	row.add_child(_button("TV  +50 ●", _watch_tv, 18, Color(0.55, 0.4, 0.1)))
+	# Ad consent choices where the law asks for them, otherwise the privacy policy.
+	row.add_child(_button("PRIVACY", func():
+		if Ads.privacy_options_required():
+			Ads.show_privacy_options()
+		else:
+			OS.shell_open(PRIVACY_URL), 18, Color(0.25, 0.2, 0.3)))
 	var note := _label("A simulation for adults. Fictional brands. Please drink responsibly.", 16, Color(1, 1, 1, 0.55))
 	v.add_child(note)
+
+
+const PRIVACY_URL := "https://vedshubham58-crypto.github.io/bartender/privacy.html"
 
 
 func show_book() -> void:

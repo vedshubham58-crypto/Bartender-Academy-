@@ -22,7 +22,7 @@ permissions:
   contents: write
 
 env:
-  GODOT_VERSION: "4.3"
+  GODOT_VERSION: "4.5.1"
   # Change to "Free on Google Play" on launch day.
   DEFAULT_CTA: Coming soon on Google Play
 
