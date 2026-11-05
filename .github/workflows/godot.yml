@@ -11,7 +11,9 @@ permissions:
   contents: write
 
 env:
-  GODOT_VERSION: "4.3"
+  GODOT_VERSION: "4.5.1"
+  # Set when the upload key is stored as repository secrets (see the Google Play bundle step).
+  UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
 
 jobs:
   build:
@@ -62,7 +64,7 @@ jobs:
           keytool -genkeypair -v -keystore ~/debug.keystore -storepass android -alias androiddebugkey \
             -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor_settings-${GODOT_VERSION}.tres <<EOT
+          cat > ~/.config/godot/editor_settings-${GODOT_VERSION%.*}.tres <<EOT
           [gd_resource type="EditorSettings" format=3]
           [resource]
           export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
@@ -71,8 +73,8 @@ jobs:
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           EOT
-          sed -i 's/^ *//' ~/.config/godot/editor_settings-${GODOT_VERSION}.tres
-          cat ~/.config/godot/editor_settings-${GODOT_VERSION}.tres
+          sed -i 's/^ *//' ~/.config/godot/editor_settings-${GODOT_VERSION%.*}.tres
+          cat ~/.config/godot/editor_settings-${GODOT_VERSION%.*}.tres
 
       - name: Import project
         run: godot --headless --path godot --import || true
@@ -97,6 +99,12 @@ jobs:
           echo -n "${GODOT_VERSION}.stable" > godot/android/.build_version
           touch godot/android/.gdignore
           printf '\nandroid {\n    packagingOptions {\n        jniLibs {\n            useLegacyPackaging true\n        }\n    }\n}\n' >> godot/android/build/build.gradle
+          # Google Play needs the newest Android target (API 36), so compile against it too.
+          sed -i -E 's/(compileSdk *: *)[0-9]+/\136/; s/(buildTools *: *)"[^"]*"/\1"36.0.0"/' godot/android/build/config.gradle
+          echo "android.suppressUnsupportedCompileSdk=36" >> godot/android/build/gradle.properties
+          grep -nE "compileSdk|targetSdk|buildTools" godot/android/build/config.gradle
+          # Play Console's version number goes up with every CI run.
+          sed -i "s/^version\/code=.*/version\/code=${GITHUB_RUN_NUMBER}/" godot/export_presets.cfg
           godot --headless --path godot --export-release "Android" build/bartender-academy.apk
           ls -la godot/build
 
@@ -111,6 +119,14 @@ jobs:
           ls -la godot/build/bartender-academy.apk
           # Compressed native libraries only install if the app may extract them.
           if unzip -v godot/build/bartender-academy.apk "lib/*" | grep -q Defl; then grep -iE "extractNativeLibs.*(true|0xffffffff)" manifest.txt; fi
+          # Google Play rejects native code that isn't aligned for 16 KB memory pages.
+          mkdir -p libcheck && unzip -oq godot/build/bartender-academy.apk 'lib/*' -d libcheck
+          for so in libcheck/lib/*/*.so; do
+            align=$(readelf -lW "$so" | awk '/LOAD/{print $NF}' | sort -u)
+            echo "$so: $align"
+            for a in $align; do [ $((a)) -ge 16384 ] || { echo "not 16 KB aligned: $so"; exit 1; }; done
+          done
+          grep -E "targetSdkVersion|minSdkVersion" manifest.txt
 
       - uses: actions/upload-artifact@v4
         with:
@@ -129,3 +145,28 @@ jobs:
           gh release create test-build bartender-academy.apk --prerelease \
             --title "Bartender Academy test build" \
             --notes "Test build from ${GITHUB_SHA::7}."
+
+      # The Google Play upload (.aab) with real ads, signed with the upload key.
+      # Needs the UPLOAD_KEYSTORE_BASE64 and UPLOAD_KEYSTORE_PASSWORD repository secrets.
+      - name: Export Google Play bundle
+        if: github.event_name != 'pull_request' && env.UPLOAD_KEYSTORE_BASE64 != ''
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: /home/runner/upload.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: upload
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 -d > /home/runner/upload.keystore
+          godot --headless --path godot --export-release "Android Store" build/bartender-academy.aab
+          rm /home/runner/upload.keystore
+          ls -la godot/build/bartender-academy.aab
+
+      - name: Publish Google Play bundle as a download link
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('godot/build/bartender-academy.aab') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp godot/build/bartender-academy.aab bartender-academy.aab
+          gh release delete store-build --yes --cleanup-tag || true
+          gh release create store-build bartender-academy.aab --prerelease \
+            --title "Bartender Academy Google Play bundle" \
+            --notes "Upload this .aab to Play Console. Version code ${GITHUB_RUN_NUMBER}, from ${GITHUB_SHA::7}."

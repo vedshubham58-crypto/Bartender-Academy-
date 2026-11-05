@@ -2,8 +2,9 @@
 extends EditorPlugin
 ## Adds the AdMob plugin (built from android-ads-plugin/ by CI) to Android exports.
 
-## Google's test app id. Swap in the real AdMob app id before launch.
-const ADMOB_APP_ID := "ca-app-pub-3940256099942544~3347511713"
+## The game's AdMob app id. Test builds still use Google's test ad units (see scripts/ads.gd),
+## so no real ads show until the store build.
+const ADMOB_APP_ID := "ca-app-pub-3684983257311025~6578298780"
 
 var _export: EditorExportPlugin
 
@@ -29,7 +30,8 @@ class NeonAdsExport extends EditorExportPlugin:
 		return PackedStringArray(["neon_ads/bin/neon-ads-release.aar"])
 
 	func _get_android_dependencies(platform: EditorExportPlatform, debug: bool) -> PackedStringArray:
-		return PackedStringArray(["com.google.android.gms:play-services-ads:23.6.0"])
+		return PackedStringArray(["com.google.android.gms:play-services-ads:23.6.0",
+			"com.google.android.ump:user-messaging-platform:3.1.0"])
 
 	func _get_android_manifest_application_element_contents(platform: EditorExportPlatform, debug: bool) -> String:
 		return '<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="%s"/>' % ADMOB_APP_ID

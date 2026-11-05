@@ -26,6 +26,9 @@ import com.google.android.gms.ads.interstitial.InterstitialAd;
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+import com.google.android.ump.ConsentInformation;
+import com.google.android.ump.ConsentRequestParameters;
+import com.google.android.ump.UserMessagingPlatform;
 
 import org.godotengine.godot.Godot;
 import org.godotengine.godot.plugin.GodotPlugin;
@@ -33,6 +36,7 @@ import org.godotengine.godot.plugin.SignalInfo;
 import org.godotengine.godot.plugin.UsedByGodot;
 
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Shows AdMob full-screen ads for the game. GDScript calls start(), then
@@ -67,6 +71,16 @@ public class NeonAds extends GodotPlugin {
         return signals;
     }
 
+    private ConsentInformation consent;
+    private final AtomicBoolean adsStarted = new AtomicBoolean(false);
+    private String pendingBannerId = "";
+    private boolean pendingBannerTop;
+    private boolean pendingBannerVisible;
+
+    /**
+     * Asks Google's consent tool (UMP) first: in the UK, EEA and other regions that
+     * need it, this shows the consent form once. Ads start only when consent allows.
+     */
     @UsedByGodot
     public void start(String interstitialUnit, String rewardedUnit) {
         interstitialId = interstitialUnit;
@@ -74,10 +88,40 @@ public class NeonAds extends GodotPlugin {
         Activity activity = getActivity();
         if (activity == null) return;
         activity.runOnUiThread(() -> {
+            consent = UserMessagingPlatform.getConsentInformation(activity);
+            consent.requestConsentInfoUpdate(activity, new ConsentRequestParameters.Builder().build(),
+                    () -> UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity, error -> startAds()),
+                    error -> startAds());
+            // Consent from an earlier session: no need to wait for the update.
+            startAds();
+        });
+    }
+
+    private void startAds() {
+        Activity activity = getActivity();
+        if (activity == null || consent == null || !consent.canRequestAds()) return;
+        if (!adsStarted.compareAndSet(false, true)) return;
+        activity.runOnUiThread(() -> {
             MobileAds.initialize(activity, status -> { });
             loadInterstitial();
             loadRewarded();
+            if (pendingBannerVisible) showBanner(pendingBannerId, pendingBannerTop);
         });
+    }
+
+    /** True where the law requires a way to change ad consent (show a Privacy settings button). */
+    @UsedByGodot
+    public boolean isPrivacyOptionsRequired() {
+        return consent != null && consent.getPrivacyOptionsRequirementStatus()
+                == ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED;
+    }
+
+    /** Opens Google's consent form again so the player can change their choice. */
+    @UsedByGodot
+    public void showPrivacyOptions() {
+        Activity activity = getActivity();
+        if (activity == null) return;
+        activity.runOnUiThread(() -> UserMessagingPlatform.showPrivacyOptionsForm(activity, error -> startAds()));
     }
 
     @UsedByGodot
@@ -199,6 +243,10 @@ public class NeonAds extends GodotPlugin {
     public void showBanner(String unitId, boolean top) {
         Activity a = getActivity();
         if (a == null || unitId.isEmpty()) return;
+        pendingBannerId = unitId;
+        pendingBannerTop = top;
+        pendingBannerVisible = true;
+        if (!adsStarted.get()) return; // shown once consent allows ads
         a.runOnUiThread(() -> {
             if (banner == null) {
                 banner = new AdView(a);
@@ -223,6 +271,7 @@ public class NeonAds extends GodotPlugin {
 
     @UsedByGodot
     public void hideBanner() {
+        pendingBannerVisible = false;
         Activity a = getActivity();
         if (a == null) return;
         a.runOnUiThread(() -> {

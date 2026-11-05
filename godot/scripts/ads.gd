@@ -2,10 +2,22 @@ extends Node
 ## Ads. On a phone they come from the NeonAds Android plugin (AdMob). Anywhere
 ## else there are no ads: interstitials are skipped and rewards are just given.
 
-## Google's test ad units. Swap in real ones before launch.
-const INTERSTITIAL_ID := "ca-app-pub-3940256099942544/1033173712"
-const REWARDED_ID := "ca-app-pub-3940256099942544/5224354917"
-const BANNER_ID := "ca-app-pub-3940256099942544/6300978111"
+## Real ad units only in the Google Play build (export preset "Android Store", feature
+## "store"). Test APKs keep Google's test units, so tapping ads while testing is safe.
+const STORE := {
+	"interstitial": "ca-app-pub-3684983257311025/9983191325",
+	"rewarded": "ca-app-pub-3684983257311025/3617305550",
+	"banner": "ca-app-pub-3684983257311025/5265217114",
+}
+const TEST := {
+	"interstitial": "ca-app-pub-3940256099942544/1033173712",
+	"rewarded": "ca-app-pub-3940256099942544/5224354917",
+	"banner": "ca-app-pub-3940256099942544/6300978111",
+}
+var _units: Dictionary = STORE if OS.has_feature("store") else TEST
+var INTERSTITIAL_ID: String = _units.interstitial
+var REWARDED_ID: String = _units.rewarded
+var BANNER_ID: String = _units.banner
 
 var _ads: Object
 var _after_interstitial := Callable()
@@ -39,6 +51,17 @@ func hide_banner() -> void:
 	banner_on = false
 	if _ads:
 		_ads.hideBanner()
+
+
+## True where the law asks for a way to change ad consent (UK, EEA, some US states).
+func privacy_options_required() -> bool:
+	return _ads != null and _ads.isPrivacyOptionsRequired()
+
+
+## Opens Google's consent form so the player can change their ad choices.
+func show_privacy_options() -> void:
+	if _ads:
+		_ads.showPrivacyOptions()
 
 
 ## Whether a reward video can be shown right now.
