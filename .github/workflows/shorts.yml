@@ -1,0 +1,85 @@
+name: Make Shorts
+
+# Every morning the game plays two drinks by itself, twice, and each run is recorded as a
+# vertical 1080x1920 clip with captions. The clips land in the "shorts" release:
+# https://github.com/<owner>/<repo>/releases/tag/shorts
+# The daily posting task picks them up from there. Run it by hand from the Actions tab too.
+on:
+  schedule:
+    - cron: "0 0 * * *" # 05:30 in India
+  workflow_dispatch:
+    inputs:
+      count:
+        description: How many clips
+        default: "2"
+      cta:
+        description: Line on the end card
+        default: Coming soon on Google Play
+  push:
+    paths: ["tools/make_shorts.py", "godot/tests/promo.gd", ".github/workflows/shorts.yml"]
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.3"
+  # Change to "Free on Google Play" on launch day.
+  DEFAULT_CTA: Coming soon on Google Play
+
+jobs:
+  shorts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot-editor
+          key: godot-editor-${{ env.GODOT_VERSION }}
+
+      - name: Download Godot
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot-editor && cd ~/godot-editor
+          curl -sSfLO https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+
+      - name: Install Godot, a virtual screen, fonts and ffmpeg
+        run: |
+          cd ~/godot-editor
+          unzip -oq Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          sudo cp Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb ffmpeg libgl1-mesa-dri fonts-dejavu-core > /dev/null
+
+      - name: Import project
+        run: godot --headless --path godot --import || true
+
+      - name: Record clips
+        env:
+          COUNT: ${{ github.event.inputs.count || '2' }}
+          CTA: ${{ github.event.inputs.cta || env.DEFAULT_CTA }}
+        run: |
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python3 tools/make_shorts.py --godot godot --out shorts --count "$COUNT" --cta "$CTA"
+          ls -la shorts
+          ls shorts/*.mp4 > /dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shorts
+          path: shorts/
+
+      - name: Add clips to the shorts release
+        if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view shorts > /dev/null 2>&1 || gh release create shorts --prerelease \
+            --title "Shorts and Reels clips" --notes "Daily gameplay clips for Shorts and Reels, made by the Make Shorts workflow."
+          gh release upload shorts shorts/*.mp4 shorts/*.json --clobber
+          # Keep the newest 60 files (about two weeks of clips and captions).
+          gh release view shorts --json assets --jq '.assets | sort_by(.createdAt) | reverse | .[60:] | .[].name' |
+            while read -r old; do gh release delete-asset shorts "$old" --yes; done
