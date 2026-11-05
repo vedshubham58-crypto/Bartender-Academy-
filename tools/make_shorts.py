@@ -24,11 +24,11 @@ HOOKS = [
     "POV: your first shift at a rooftop bar",
     "Rate this {d1} 1 to 10",
     "Perfect pour or fail?",
-    "2 cocktails. 40 seconds. Go.",
+    "Your shift starts now. Go.",
     "Bartender test: {d1} + {d2}",
     "Which one would you order?",
     "Satisfying cocktail making",
-    "Only real bartenders get 3 stars",
+    "Only real bartenders get this right",
     "How a {d1} is really made",
 ]
 TITLES = [
@@ -40,8 +40,8 @@ TITLES = [
 ]
 CAPTIONS = [
     "{d1} or {d2}? Tell me which one you'd order.\n\nReal recipe, {d1}: {home}\n\n{cta}",
-    "Pour, shake, serve. {stars} stars on this shift.\nComment a cocktail and we'll make it next.\n\n{cta}",
-    "Learn real cocktails behind a 3D rooftop bar. Today: {d1} and {d2}.\n\n{cta}",
+    "Learn to mix cocktails behind the bar and upskill like a pro. Comment a cocktail and we'll make it next.\n\n{cta}",
+    "Walk into a rooftop bar and mix real cocktails. {d1} or {d2}? Tell us which one you'd order.\n\n{cta}",
 ]
 HASHTAGS = ["#bartender", "#cocktails", "#mobilegame", "#bartendergame", "#mixology", "#cocktailrecipe",
             "#androidgames", "#simulator", "#satisfying", "#gaming", "#indiegame", "#drinkresponsibly"]
