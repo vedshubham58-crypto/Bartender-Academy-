@@ -79,6 +79,7 @@ func make(gi: int, shots: bool) -> void:
 		guard += 1
 		var s: Dictionary = main.cur.step
 		var i: int = main.cur.i
+		await _between_steps()
 		match s.t:
 			"glass", "rim", "ice", "garnish":
 				if shots and s.t == "glass":
@@ -157,6 +158,11 @@ func make(gi: int, shots: bool) -> void:
 	if shots:
 		await shot(id + "_served")
 	print("served %s, coins %d" % [id, Save.coins])
+
+
+## A breath between steps (the promo recorder slows down here so each step can be seen).
+func _between_steps() -> void:
+	pass
 
 
 func shot(name: String) -> void:
