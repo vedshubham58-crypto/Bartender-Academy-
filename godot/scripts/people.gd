@@ -265,3 +265,32 @@ static func hide_head(s: Skeleton3D) -> void:
 	var b := bone(s, "Neck")
 	if b >= 0:
 		s.set_bone_pose_scale(b, Vector3.ONE * 0.001)
+
+
+## Turns the head toward [param point] (world). [param amount] 0..1 blends from looking
+## straight ahead. Call every frame after the body pose; it starts from the head's own pose.
+static func look_at_point(n: Node3D, point: Vector3, amount := 1.0) -> void:
+	var s := skel(n)
+	var hb := bone(s, "Head")
+	if hb < 0:
+		return
+	if not n.has_meta("head_base"):
+		n.set_meta("head_base", s.get_bone_pose_rotation(hb))
+	s.set_bone_pose_rotation(hb, n.get_meta("head_base"))
+	if amount <= 0.001:
+		return
+	var head := world_pos(s, "Head")
+	var fwd := local_dir(n, Vector3(0, 0, 1))
+	var to := (point - head).normalized()
+	# keep it natural: no more than ~70 degrees sideways, ~35 up or down
+	var flat := Vector3(to.x, 0, to.z).normalized()
+	var yaw := clampf(fwd.signed_angle_to(flat, Vector3.UP), -1.2, 1.2) * amount
+	var pitch := clampf(asin(clampf(to.y, -1.0, 1.0)), -0.6, 0.45) * amount
+	var sg := s.global_transform.basis
+	var g := gpose(s, hb)
+	var right := fwd.cross(Vector3.UP).normalized()
+	var turn := Basis(Vector3.UP, yaw) * Basis(right, -pitch)
+	var new_g := sg.inverse() * (turn * (sg * g.basis))
+	var p := s.get_bone_parent(hb)
+	var pb := gpose(s, p).basis if p >= 0 else Basis()
+	s.set_bone_pose_rotation(hb, (pb.inverse() * new_g.orthonormalized()).get_rotation_quaternion())

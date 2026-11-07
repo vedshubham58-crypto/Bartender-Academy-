@@ -18,6 +18,7 @@ func _ready() -> void:
 	Save.unlocked = 8
 	Save.mocktail = "--mocktail" in args
 	main = load("res://scenes/main.tscn").instantiate()
+	main.guests_leave = false # the test serves the same four seats
 	add_child(main)
 	await _frames(20)
 	await shot("menu")

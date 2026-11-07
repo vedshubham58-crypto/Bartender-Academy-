@@ -55,6 +55,7 @@ func _ready() -> void:
 	Save.light_theme = opts.theme
 	Save.tool_skin = opts.skin
 	main = load("res://scenes/main.tscn").instantiate()
+	main.guests_leave = false # the clip serves the same seats
 	add_child(main)
 	pcam = Camera3D.new()
 	add_child(pcam)

@@ -154,7 +154,8 @@ func _spawn_people() -> void:
 		People.lean(n)
 		People.place_hips(n, Vector3(x, 0.9, Bar.SEAT_Z))
 		People.arms_on_bar(n, Bar.BT, Bar.BZ1, x, {"Right": Vector3(x - .12, Bar.BT + .07, Bar.BZ1 + .2)})
-		guests.append({"node": n, "x": x, "order": {}, "patience": 0.0, "phase": i * 1.7, "bubble": null, "served": null, "drink_t": 0.0, "waiter": false})
+		n.set_meta("model", models[i])
+		guests.append({"node": n, "x": x, "order": {}, "patience": 0.0, "phase": i * 1.7, "bubble": null, "served": null, "drink_t": 0.0, "waiter": false, "seat_rot": n.rotation.y})
 	# the waiter waits at the service end of the bar with a tray
 	waiter = People.spawn("josh", bar)
 	waiter.rotation.y = -0.55
@@ -183,6 +184,8 @@ func _spawn_people() -> void:
 
 
 func _head_pos(g: Dictionary) -> Vector3:
+	if g.node == null:
+		return Vector3(g.x, 1.6, Bar.SEAT_Z)
 	return People.world_pos(People.skel(g.node), "HeadTop_End")
 
 
@@ -675,7 +678,7 @@ func start_shift() -> void:
 			if g.bubble == null:
 				_make_bubble(g)
 			g.order = {}
-			if not g.waiter and i < 3:
+			if not g.waiter and i < 3 and g.get("state", "seated") == "seated":
 				_new_order(g, 6.0 * i)
 		_clear_actions()
 		hint_label.text = "Tap a guest's order to start making it"
@@ -709,7 +712,7 @@ func _process(delta: float) -> void:
 	_update_hands(delta)
 	for g in guests:
 		if not g.waiter:
-			People.idle(g.node, time, g.phase)
+			_animate_guest(g, delta)
 	if not in_shift:
 		if overlay and not _picking:
 			# slow drift of the camera behind the menus
@@ -732,9 +735,11 @@ func _process(delta: float) -> void:
 			if g.drink_t <= 0:
 				g.served.queue_free()
 				g.served = null
-				if shift_left > 15:
+				if not g.waiter and guests_leave and randf() < 0.6:
+					_guest_leave(g) # finished: someone new will take the seat
+				elif shift_left > 15:
 					_new_order(g)
-		elif shift_left > 15 and randf() < delta * (0.06 if g.waiter else 0.12):
+		elif shift_left > 15 and g.get("state", "seated") == "seated" and randf() < delta * (0.06 if g.waiter else 0.12):
 			_new_order(g)
 	_update_bubbles()
 	if pouring:
@@ -1370,7 +1375,242 @@ func _serve() -> void:
 	g.order = {}
 	g.served = gl
 	g.drink_t = 4.0 if g.waiter else randf_range(12.0, 18.0)
+	if not g.waiter:
+		var cap: float = Recipes.GLASSES[gl.get_meta("kind")].ml
+		g.fill = _fill_look(cur.vol / cap)
+		g.color = cur.color
+		g.react = "cheer" if stars >= 2.5 else ("sip" if stars >= 1.5 else "meh")
+		g.react_t = 0.0
+		g.sip_next = 3.2
+		get_tree().create_timer(0.7).timeout.connect(_guest_says.bind(g, _reaction_line(stars, d)))
 	_end_drink(true)
+
+
+# =============================================================== guests come alive
+
+const LINES_GREAT := ["Wow, perfect!", "Best %s ever!", "Now that's a %s!", "You're a pro!", "Cheers to you!"]
+const LINES_GOOD := ["Nice, thanks!", "Mmm, good!", "Thank you!", "Lovely."]
+const LINES_MEH := ["Hmm... okay.", "Not quite right.", "Bit off, but thanks."]
+
+
+func _reaction_line(stars: float, d: Dictionary) -> String:
+	var pool: Array = LINES_GREAT if stars >= 2.5 else (LINES_GOOD if stars >= 1.5 else LINES_MEH)
+	var l: String = pool[randi() % pool.size()]
+	return l % Recipes.drink_name(d) if "%s" in l else l
+
+
+## A short line floating over a guest's head (what they say when served).
+func _guest_says(g: Dictionary, text: String) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.font_size = 64
+	l.pixel_size = 0.0015
+	l.outline_size = 14
+	l.modulate = Color(1.0, 0.95, 0.8)
+	l.outline_modulate = Color(0.12, 0.06, 0.1, 0.9)
+	bar.add_child(l)
+	l.global_position = _head_pos(g) + Vector3(0, 0.2, 0.05)
+	var tw := create_tween()
+	tw.tween_property(l, "global_position", l.global_position + Vector3(0, 0.12, 0), 2.2)
+	tw.parallel().tween_property(l, "modulate:a", 0.0, 0.6).set_delay(1.6)
+	tw.tween_callback(l.queue_free)
+
+
+## Guests aren't statues: they watch you make their drink, get restless when it takes too
+## long, cheer and sip when it arrives, and glance around the bar the rest of the time.
+func _animate_guest(g: Dictionary, delta: float) -> void:
+	if g.get("state", "seated") != "seated":
+		_animate_walk(g, delta)
+		return
+	var n: Node3D = g.node
+	People.idle(n, time, g.phase)
+	var s := People.skel(n)
+	var t: float = time + g.phase * 3.0
+	var head := _head_pos(g)
+	var fwd := People.local_dir(n, Vector3(0, 0, 1))
+	var mine: bool = not cur.is_empty() and guests.find(g) == cur.get("guest", -1)
+	# --- where to look
+	var look: Vector3 = head + fwd * 2.0
+	var amount := 0.0
+	if mine or not g.order.is_empty():
+		look = cam.global_position # watching the bartender
+		amount = 0.9 if mine else 0.6
+	elif g.served != null and g.get("react", "") != "":
+		look = g.served.global_position
+		amount = 0.5
+	else:
+		# glance at the neighbour, the city, then back to the bar
+		var k: int = int(t / 4.0) % 4
+		var side: float = 1.0 if k == 1 else (-1.0 if k == 3 else 0.0)
+		look = head + fwd * 2.0 + fwd.cross(Vector3.UP) * side * 2.5 + Vector3(0, -0.3 if k == 0 else 0.2, 0)
+		amount = 0.0 if k == 0 else 0.8
+	var cur_look: Vector3 = g.get("look", look)
+	cur_look = cur_look.lerp(look, 1.0 - exp(-delta * 4.0))
+	g.look = cur_look
+	g.look_amt = lerpf(float(g.get("look_amt", 0.0)), amount, 1.0 - exp(-delta * 3.0))
+	# --- arms: both rest on the bar, then the right one does something
+	var targets := {"Right": Vector3(g.x - .12, Bar.BT + .07, Bar.BZ1 + .2)} # resting by the glass spot
+	var react: String = g.get("react", "")
+	var gl: Node3D = g.served
+	if gl != null and react != "" and gl != _serving:
+		if not g.has("rest") or g.get("rest_of") != gl:
+			g.rest = gl.global_position
+			g.rest_of = gl
+		g.react_t = float(g.get("react_t", 0.0)) + delta
+		var rest: Vector3 = g.rest
+		var mouth := head + fwd * 0.12 + Vector3(0, -0.2, 0)
+		var want := rest
+		var tilt := 0.0
+		if react == "cheer" and g.react_t < 2.2:
+			# raise the glass: "cheers!"
+			var up: float = sin(clampf(g.react_t / 2.2, 0.0, 1.0) * PI)
+			want = rest.lerp(head + fwd * 0.3 + Vector3(0.05, 0.12, 0), up)
+		else:
+			g.sip_next -= delta
+			if g.sip_next < 0.0:
+				var k: float = clampf(-g.sip_next / 1.8, 0.0, 1.0) # 1.8 s sip
+				var up: float = sin(k * PI)
+				want = rest.lerp(mouth, up)
+				tilt = -0.7 * up
+				if k >= 1.0:
+					g.sip_next = randf_range(4.0, 7.0)
+					g.fill = maxf(0.1, g.get("fill", 0.6) - 0.15)
+					bar.set_fill(gl, g.fill, g.get("color", Color(0.8, 0.5, 0.2)))
+				amount = 0.0
+				g.look_amt = lerpf(g.look_amt, 0.0, 0.3)
+		gl.global_position = want
+		gl.rotation.x = tilt
+		# right hand around the glass, on the guest's side of it
+		targets["Right"] = want + Vector3(0.02, 0.06, -0.045)
+	elif not g.order.is_empty() and g.patience < 40.0:
+		# impatient: drum the fingers on the bar
+		var tap: float = absf(sin(t * 11.0)) * 0.035 * (1.0 if fmod(t, 3.0) < 1.6 else 0.0)
+		targets["Right"] = Vector3(g.x - 0.05, Bar.BT + 0.035 + tap, Bar.BZ1 + 0.24)
+	People.arms_on_bar(n, Bar.BT, Bar.BZ1, g.x, targets)
+	if targets.has("Right") and gl != null and react != "":
+		People.reach(s, "Right", targets["Right"], Vector3(0.5, -1, -0.4))
+		People.grip(s, "Right", 0.55)
+	People.look_at_point(n, g.look, g.look_amt)
+
+
+## Who can come in and sit at the bar.
+const GUEST_MODELS := ["kate", "david", "megan", "leonard", "louise"]
+const WALK_SPEED := 1.05
+var guests_leave := true ## tests that need the same four guests switch this off
+
+
+func _guest_leave(g: Dictionary) -> void:
+	g.state = "standing"
+	g.walk_t = 0.0
+	g.react = ""
+	g.order = {}
+
+
+## Standing up, walking away, the seat staying empty a moment, someone new walking in
+## and sitting down. Legs and arms are swung in code like the rest of the poses.
+func _animate_walk(g: Dictionary, delta: float) -> void:
+	var n: Node3D = g.node
+	g.walk_t = float(g.get("walk_t", 0.0)) + delta
+	var t: float = g.walk_t
+	var seat := Vector3(g.x, 0, Bar.SEAT_Z)
+	var away := Vector3(g.x * 1.6 + 0.4, 0, -5.2)
+	match g.state:
+		"standing": # 0.7 s: stand up, then turn away from the bar
+			var k := clampf(t / 0.7, 0.0, 1.0)
+			_pose_legs(n, k, 0.0)
+			n.rotation.y = lerp_angle(g.get("seat_rot", n.rotation.y), PI, smoothstep(0.3, 1.0, k))
+			_place_body(n, seat - Vector3(0, 0, 0.12 * k), k)
+			People.arms_down(n)
+			if k >= 1.0:
+				g.state = "leaving"
+				g.walk_t = 0.0
+		"leaving":
+			var d := seat.distance_to(away)
+			var k := clampf(t * WALK_SPEED / d, 0.0, 1.0)
+			var p := (seat - Vector3(0, 0, 0.12)).lerp(away, k)
+			n.rotation.y = atan2(away.x - seat.x, away.z - seat.z)
+			_pose_legs(n, 1.0, t * 7.0)
+			_place_body(n, p, 1.0)
+			if k >= 1.0:
+				g.model = n.get_meta("model", "")
+				n.queue_free()
+				g.node = null
+				g.state = "away"
+				g.walk_t = 0.0
+				g.wait = randf_range(2.5, 6.0)
+		"away":
+			if t >= g.get("wait", 3.0) and in_shift:
+				var models := GUEST_MODELS.duplicate()
+				models.erase(g.get("model", ""))
+				var m: String = models[randi() % models.size()]
+				var nn := People.spawn(m, bar)
+				nn.set_meta("model", m)
+				People.set_height(nn, randf_range(1.66, 1.8))
+				g.node = nn
+				g.erase("look")
+				g.look_amt = 0.0
+				g.state = "arriving"
+				g.walk_t = 0.0
+		"arriving":
+			var d := away.distance_to(seat)
+			var k := clampf(t * WALK_SPEED / d, 0.0, 1.0)
+			var p := away.lerp(seat - Vector3(0, 0, 0.12), k)
+			n.rotation.y = atan2(seat.x - away.x, seat.z - away.z)
+			_pose_legs(n, 1.0, t * 7.0)
+			_place_body(n, p, 1.0)
+			if k >= 1.0:
+				g.state = "sitting"
+				g.walk_t = 0.0
+		"sitting": # 0.7 s: turn to the bar and sit down
+			var k := clampf(t / 0.7, 0.0, 1.0)
+			n.rotation.y = lerp_angle(n.rotation.y, 0.0, smoothstep(0.0, 0.6, k))
+			_pose_legs(n, 1.0 - k, 0.0)
+			_place_body(n, seat - Vector3(0, 0, 0.12 * (1.0 - k)), 1.0 - k)
+			People.arms_down(n)
+			if k >= 1.0:
+				People.sit_legs(n)
+				People.lean(n)
+				People.place_hips(n, Vector3(g.x, 0.9, Bar.SEAT_Z))
+				g.seat_rot = n.rotation.y
+				g.state = "seated"
+				if in_shift and shift_left > 15:
+					_new_order(g, 2.0)
+				_animate_guest(g, 0.0)
+				return
+	if g.state != "away" and g.node != null:
+		People.idle(g.node, time, g.phase)
+
+
+## Legs from sitting (0) to standing (1); [param swing] > 0 swings them in a walk.
+func _pose_legs(n: Node3D, stand: float, swing: float) -> void:
+	var s := People.skel(n)
+	var w := sin(swing) * 0.38 if swing > 0.0 else 0.0
+	for side in ["Left", "Right"]:
+		var o := 1.0 if side == "Left" else -1.0
+		var ws := w * o
+		var sit_up := Vector3(.12 * o, -.15, 1)
+		var walk_up := Vector3(0.03 * o, -1, ws)
+		var sit_low := Vector3(0, -1, .1)
+		var walk_low := Vector3(0, -1, minf(ws, 0.0) * 1.3 + 0.05)
+		People.aim(s, side + "UpLeg", side + "Leg", People.local_dir(n, sit_up.lerp(walk_up, stand)))
+		People.aim(s, side + "Leg", side + "Foot", People.local_dir(n, sit_low.lerp(walk_low, stand)))
+		# arms swing the other way to the legs
+		if swing > 0.0:
+			People.aim(s, side + "Arm", side + "ForeArm", People.local_dir(n, Vector3(.12 * o, -1, -ws * 0.6)))
+			People.aim(s, side + "ForeArm", side + "Hand", People.local_dir(n, Vector3(.05 * o, -1, 0.25 - ws * 0.4)))
+	People.aim(s, "Spine", "Spine1", People.local_dir(n, Vector3(0, 1, lerpf(0.28, 0.04, stand))))
+
+
+## Puts the body over [param p] (floor point): seated hips on the stool, standing feet on the floor.
+func _place_body(n: Node3D, p: Vector3, stand: float) -> void:
+	var s := People.skel(n)
+	var hips := People.world_pos(s, "Hips")
+	var foot := minf(People.world_pos(s, "LeftToeBase").y, People.world_pos(s, "RightToeBase").y)
+	var stand_y := hips.y - foot + 0.01
+	var y := lerpf(0.9, stand_y, stand)
+	n.global_position += Vector3(p.x, y, p.z) - hips
 
 
 ## Clears the work area. [param keep_glass] keeps the served glass alive.
