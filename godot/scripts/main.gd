@@ -562,6 +562,7 @@ func show_menu() -> void:
 		Audio.set_music(not Save.music)
 		show_menu(), 18, Color(0.25, 0.2, 0.3)))
 	row.add_child(_button("TV  +50 ●", _watch_tv, 18, Color(0.55, 0.4, 0.1)))
+	row.add_child(_button("RATE US", func(): OS.shell_open(STORE_URL), 18, Color(0.25, 0.2, 0.3)))
 	# Ad consent choices where the law asks for them, otherwise the privacy policy.
 	row.add_child(_button("PRIVACY", func():
 		if Ads.privacy_options_required():
@@ -573,6 +574,9 @@ func show_menu() -> void:
 
 
 const PRIVACY_URL := "https://vedshubham58-crypto.github.io/bartender/privacy.html"
+const STORE_URL := "https://play.google.com/store/apps/details?id=com.vedshubham.bartenderacademy"
+## Shifts after which Google's rating card is offered (to everyone, whatever their score).
+const REVIEW_AFTER_SHIFTS := [3, 8]
 
 
 func show_book() -> void:
@@ -1509,6 +1513,11 @@ func _score_card(unlocked: String, new_best: bool) -> void:
 	row.add_child(_button("Bar Book", show_book, 22, Color(0.25, 0.2, 0.3)))
 	row.add_child(_button("Menu", show_menu, 22, Color(0.25, 0.2, 0.3)))
 	v.add_child(row)
+	# a finished shift is a good moment for Google's rating card, a couple of times only
+	if Save.shifts in REVIEW_AFTER_SHIFTS and not Save.review_asked.has(Save.shifts):
+		Save.review_asked.append(Save.shifts)
+		Save.save()
+		get_tree().create_timer(1.6).timeout.connect(Ads.request_review)
 
 
 ## "Next shift unlocks: X & Y", the reason to play one more.

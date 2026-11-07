@@ -58,6 +58,12 @@ func privacy_options_required() -> bool:
 	return _ads != null and _ads.isPrivacyOptionsRequired()
 
 
+## Google Play's rating card over the game (Google decides if and how often it shows).
+func request_review() -> void:
+	if _ads:
+		_ads.requestReview()
+
+
 ## Opens Google's consent form so the player can change their ad choices.
 func show_privacy_options() -> void:
 	if _ads:

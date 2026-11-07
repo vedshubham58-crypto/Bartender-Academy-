@@ -19,6 +19,7 @@ var owned: Array = ["tools_steel", "lights_warm"] ## shop items bought
 var tool_skin := "steel"
 var light_theme := "warm"
 var boosts := {} ## one-shift boosts waiting: "patience" / "tips" -> true
+var review_asked: Array = [] ## shift counts at which Google's rating card was offered
 
 
 func _ready() -> void:
@@ -66,6 +67,7 @@ func load_game() -> void:
 	tool_skin = str(data.get("tool_skin", "steel"))
 	light_theme = str(data.get("light_theme", "warm"))
 	boosts = data.get("boosts", {})
+	review_asked = data.get("review_asked", []).map(func(x): return int(x))
 	if mocktail_locked():
 		mocktail = true
 
@@ -78,4 +80,5 @@ func save() -> void:
 		"coins": coins, "unlocked": unlocked, "made": made, "best": best, "shifts": shifts,
 		"birth_year": birth_year, "mocktail": mocktail, "sound": sound, "music": music, "best_score": best_score, "asked_notify": asked_notify, "bartender": bartender,
 		"owned": owned, "tool_skin": tool_skin, "light_theme": light_theme, "boosts": boosts,
+		"review_asked": review_asked,
 	}))

@@ -26,6 +26,9 @@ import com.google.android.gms.ads.interstitial.InterstitialAd;
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+import com.google.android.play.core.review.ReviewInfo;
+import com.google.android.play.core.review.ReviewManager;
+import com.google.android.play.core.review.ReviewManagerFactory;
 import com.google.android.ump.ConsentInformation;
 import com.google.android.ump.ConsentRequestParameters;
 import com.google.android.ump.UserMessagingPlatform;
@@ -114,6 +117,25 @@ public class NeonAds extends GodotPlugin {
     public boolean isPrivacyOptionsRequired() {
         return consent != null && consent.getPrivacyOptionsRequirementStatus()
                 == ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED;
+    }
+
+    /**
+     * Google Play's own rating card, shown over the game. Google decides whether it actually
+     * appears (it limits how often a player sees it), and nothing tells us if they rated.
+     */
+    @UsedByGodot
+    public void requestReview() {
+        Activity activity = getActivity();
+        if (activity == null) return;
+        activity.runOnUiThread(() -> {
+            ReviewManager manager = ReviewManagerFactory.create(activity);
+            manager.requestReviewFlow().addOnCompleteListener(task -> {
+                if (task.isSuccessful()) {
+                    ReviewInfo info = task.getResult();
+                    manager.launchReviewFlow(activity, info);
+                }
+            });
+        });
     }
 
     /** Opens Google's consent form again so the player can change their choice. */
