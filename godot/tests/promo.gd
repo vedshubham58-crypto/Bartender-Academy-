@@ -201,13 +201,15 @@ func _on_step(cur: Dictionary) -> void:
 			_pov()
 		"guest":
 			# mostly your own view, one outside angle for the showy steps
-			if s.t in ["shake", "muddle"]:
+			if s.t in ["shake", "muddle", "blend"]:
 				_cut("side" if _alt % 2 == 0 else "side_l", 3.0)
 			else:
 				_pov()
 		"learn":
 			# close on the glass so every step is easy to see
-			if s.t in ["pour", "top", "dash"]:
+			if s.t in ["layer", "flame"]:
+				_cut("low", 4.0)
+			elif s.t in ["pour", "top", "dash"]:
 				_pov()
 			elif s.t in ["shake", "stir"]:
 				_cut("side", 3.0)
@@ -221,7 +223,9 @@ func _on_step(cur: Dictionary) -> void:
 					_cut("low" if _alt % 2 == 0 else "top", 2.5)
 				"shake":
 					_cut("side", 3.0)
-				"stir", "strain":
-					_cut("low", 3.0)
+				"stir", "strain", "layer", "flame":
+					_cut("low", 3.5)
+				"blend":
+					_cut("side", 3.0)
 				_:
 					_cut("top", 2.5)

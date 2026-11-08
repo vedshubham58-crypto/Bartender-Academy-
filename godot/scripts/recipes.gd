@@ -84,7 +84,8 @@ const GARNISH := {
 }
 const RIMS := {"salt": "Salt rim", "sugar": "Sugar rim", "none": "No rim"}
 
-## Step types: glass, rim, muddle, pour(src, ml), dash(src, n), top(src), ice, shake, stir, strain, garnish.
+## Step types: glass, rim, muddle, pour(src, ml), dash(src, n), top(src), ice, shake, stir, strain, garnish,
+## layer(src, ml, sink?) poured gently over a spoon so it floats (or sinks), blend, flame (flamed orange peel).
 ## Order of the list = the order you unlock them.
 const DRINKS := [
 	{
@@ -165,7 +166,7 @@ const DRINKS := [
 		"steps": [
 			{"t": "glass", "v": "rocks"}, {"t": "pour", "src": "sugar", "ml": 10}, {"t": "dash", "src": "bitters", "n": 2},
 			{"t": "pour", "src": "bourbon", "ml": 50}, {"t": "ice", "v": "big"}, {"t": "stir"},
-			{"t": "garnish", "v": "orange_twist"},
+			{"t": "flame"}, {"t": "garnish", "v": "orange_twist"},
 		],
 		"home": ["In a short glass add 10 ml sugar syrup and 2 dashes of bitters.", "Add 50 ml bourbon.", "Add one big ice cube (freeze water in a small box) and stir for 20 to 30 seconds.", "Squeeze a strip of orange peel over the drink, then drop it in."],
 		"mocktail": "Smoked Tea Fashioned",
@@ -229,9 +230,9 @@ const DRINKS := [
 		"steps": [
 			{"t": "glass", "v": "martini"}, {"t": "pour", "src": "vodka", "ml": 40}, {"t": "pour", "src": "triple_sec", "ml": 15},
 			{"t": "pour", "src": "cranberry", "ml": 30}, {"t": "pour", "src": "lime", "ml": 15}, {"t": "ice", "v": "cubes"},
-			{"t": "shake"}, {"t": "strain"}, {"t": "garnish", "v": "orange_twist"},
+			{"t": "shake"}, {"t": "strain"}, {"t": "flame"}, {"t": "garnish", "v": "orange_twist"},
 		],
-		"home": ["Chill a stemmed glass.", "In a jar add 40 ml vodka, 15 ml orange liqueur, 30 ml cranberry juice and 15 ml lime juice.", "Add ice, shake hard and strain into the glass.", "Squeeze an orange peel over the top."],
+		"home": ["Chill a stemmed glass.", "In a jar add 40 ml vodka, 15 ml orange liqueur, 30 ml cranberry juice and 15 ml lime juice.", "Add ice, shake hard and strain into the glass.", "Squeeze an orange peel over the top (bartenders squeeze it through a lit match for a flash of flame; take care)."],
 		"mocktail": "Cranberry Grape Cosmo",
 	},
 	{
@@ -281,7 +282,7 @@ const DRINKS := [
 		"about": "Grenadine poured last sinks to the bottom to make the sunrise colours.",
 		"steps": [
 			{"t": "glass", "v": "highball"}, {"t": "ice", "v": "cubes"}, {"t": "pour", "src": "tequila", "ml": 45},
-			{"t": "top", "src": "orange_juice"}, {"t": "pour", "src": "grenadine", "ml": 15}, {"t": "garnish", "v": "orange_wheel"},
+			{"t": "top", "src": "orange_juice"}, {"t": "layer", "src": "grenadine", "ml": 15, "sink": true}, {"t": "garnish", "v": "orange_wheel"},
 		],
 		"home": ["Fill a tall glass with ice.", "Add 45 ml tequila and top with orange juice.", "Slowly pour 15 ml grenadine down the side. Don't stir.", "Add an orange wheel."],
 		"mocktail": "Sunrise Cooler",
@@ -375,7 +376,7 @@ const DRINKS := [
 		"about": "Vodka and coffee liqueur with cream floated on top.",
 		"steps": [
 			{"t": "glass", "v": "rocks"}, {"t": "ice", "v": "cubes"}, {"t": "pour", "src": "vodka", "ml": 50},
-			{"t": "pour", "src": "coffee_liq", "ml": 20}, {"t": "pour", "src": "cream", "ml": 30},
+			{"t": "pour", "src": "coffee_liq", "ml": 20}, {"t": "layer", "src": "cream", "ml": 30},
 		],
 		"home": ["Fill a short glass with ice.", "Add 50 ml vodka and 20 ml coffee liqueur.", "Pour 30 ml cream slowly over the back of a spoon so it floats."],
 		"mocktail": "Vanilla Cream Cooler",
@@ -467,14 +468,14 @@ const DRINKS := [
 		"mocktail": "Cucumber Fizz",
 	},
 	{
-		"id": "pina_colada", "name": "Piña Colada", "price": 55, "glass": "highball", "method": "Shake",
+		"id": "pina_colada", "name": "Piña Colada", "price": 55, "glass": "highball", "method": "Blend",
 		"about": "Rum, coconut and pineapple. Creamy, sweet and tropical.",
 		"steps": [
 			{"t": "glass", "v": "highball"}, {"t": "pour", "src": "white_rum", "ml": 50}, {"t": "pour", "src": "coconut_cream", "ml": 30},
-			{"t": "pour", "src": "pineapple_juice", "ml": 90}, {"t": "ice", "v": "crushed"}, {"t": "shake"},
-			{"t": "strain"}, {"t": "garnish", "v": "pineapple_wedge"},
+			{"t": "pour", "src": "pineapple_juice", "ml": 90}, {"t": "ice", "v": "crushed"}, {"t": "blend"},
+			{"t": "garnish", "v": "pineapple_wedge"},
 		],
-		"home": ["Shake 50 ml white rum, 30 ml coconut cream and 90 ml pineapple juice with ice (or blend with crushed ice).", "Pour into a tall glass.", "Add a pineapple wedge."],
+		"home": ["Put 50 ml white rum, 30 ml coconut cream and 90 ml pineapple juice in a blender.", "Add a cup of crushed ice and blend until smooth.", "Pour into a tall glass and add a pineapple wedge."],
 		"mocktail": "Virgin Colada",
 	},
 	{
@@ -521,6 +522,17 @@ const DRINKS := [
 		],
 		"home": ["Fill a tall glass with ice.", "Add 15 ml each of vodka, gin, white rum, tequila and orange liqueur.", "Add 25 ml lemon juice and 15 ml sugar syrup.", "Top with cola and add a lemon wheel."],
 		"mocktail": "Long Island Iced (Zero) Tea",
+	},
+	{
+		"id": "frozen_margarita", "name": "Frozen Margarita", "price": 60, "glass": "coupe", "method": "Blend",
+		"about": "A margarita blended with crushed ice until it's smooth like a slushie.",
+		"steps": [
+			{"t": "glass", "v": "coupe"}, {"t": "rim", "v": "salt"}, {"t": "pour", "src": "tequila", "ml": 50},
+			{"t": "pour", "src": "triple_sec", "ml": 20}, {"t": "pour", "src": "lime", "ml": 25}, {"t": "pour", "src": "sugar", "ml": 10},
+			{"t": "ice", "v": "crushed"}, {"t": "blend"}, {"t": "garnish", "v": "lime_wheel"},
+		],
+		"home": ["Salt the rim of a wide glass.", "Put 50 ml tequila, 20 ml orange liqueur, 25 ml lime juice and 10 ml sugar syrup in a blender.", "Add a cup of crushed ice and blend until smooth.", "Pour into the glass and add a lime wheel."],
+		"mocktail": "Frozen Grapefruit Rita",
 	},
 ]
 
@@ -589,13 +601,20 @@ func step_text(s: Dictionary, hint := true) -> String:
 			return "Strain into the glass"
 		"garnish":
 			return GARNISH[s.v] if hint else "Garnish"
+		"layer":
+			var how := "Sink" if s.get("sink", false) else "Float"
+			return ("%s %s · %d ml" % [how, src_name(s.src), s.ml]) if hint else ("%s %s · ? ml" % [how, src_name(s.src)])
+		"blend":
+			return "Blend until smooth"
+		"flame":
+			return "Flame the orange peel"
 	return s.t
 
 
 ## True if the recipe is built in a shaker tin (pours go into the tin first).
 func uses_tin(d: Dictionary) -> bool:
 	for s in d.steps:
-		if s.t == "shake" or s.t == "strain":
+		if s.t == "shake" or s.t == "strain" or s.t == "blend":
 			return true
 	return false
 
@@ -614,3 +633,24 @@ static func stars_for(mistakes: int, pour_errors: Array) -> float:
 
 static func is_perfect(err_ml: float) -> bool:
 	return absf(err_ml) <= 2.5
+
+
+## Guests sometimes ask for a drink their way. Returns a copy of [param d] with the change made
+## and a "request" line for the order bubble, or [param d] itself when nothing fits.
+## [param pick] chooses between the requests that fit (tests pass it; the game passes randi()).
+func with_request(d: Dictionary, pick: int) -> Dictionary:
+	var fits := []
+	for k in d.steps.size():
+		var s: Dictionary = d.steps[k]
+		if s.t == "pour" and s.src in ["sugar", "honey"] and s.ml >= 10:
+			fits.append([k, "Less sweet, please", "half the syrup", int(s.ml / 2)])
+		if s.t == "pour" and s.src in ["lime", "lemon"] and s.ml >= 15 and s.ml <= 30:
+			fits.append([k, "A bit more sour, please", "5 ml more %s" % ("lime" if s.src == "lime" else "lemon"), s.ml + 5])
+	if fits.is_empty():
+		return d
+	var f: Array = fits[pick % fits.size()]
+	var c: Dictionary = d.duplicate(true)
+	c.steps[f[0]].ml = f[3]
+	c.request = f[1]
+	c.req_note = f[2]
+	return c

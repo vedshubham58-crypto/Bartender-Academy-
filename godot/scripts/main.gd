@@ -99,6 +99,11 @@ var _tv_slide := 0
 var _tv_next := 0.0
 var _tv_reward_at := -999.0
 var paused := false
+var blender: Node3D
+var _float := {} ## a layer being poured over the spoon
+var _blend := {}
+var _flame := {}
+var _flip := {}
 var _last_pause_ad := -999.0
 var title_font: FontVariation
 
@@ -404,7 +409,8 @@ func _update_bubbles() -> void:
 		var making: bool = not cur.is_empty() and cur.guest == guests.find(g)
 		var who := "Waiter: table %d\n" % g.table if g.waiter else ""
 		var mood := "making now" if making else ("waiting" if g.patience > 40 else "hurry!")
-		b.text = "%s%s\n%s" % [who, Recipes.drink_name(g.order), mood]
+		var ask: String = ("\n" + g.order.request) if g.order.has("request") else ""
+		b.text = "%s%s%s\n%s" % [who, Recipes.drink_name(g.order), ask, mood]
 		var sb: StyleBoxFlat = b.get_theme_stylebox("normal")
 		sb.border_color = Color(1.0, 0.6, 0.15) if making else (Color(0.25, 0.8, 0.45) if g.patience > 40 else C_RED)
 		sb.set_border_width_all(4)
@@ -697,6 +703,8 @@ func _new_order(g: Dictionary, delay := 0.0) -> void:
 	var d: Dictionary = pool[randi() % pool.size()]
 	if Save.made.is_empty() and shift_stats.served == 0 and guests.find(g) == 0:
 		d = Recipes.DRINKS[0]
+	elif Save.shifts >= 1 and randf() < 0.3:
+		d = Recipes.with_request(d, randi())
 	g.order = d
 	g.patience = PATIENCE * (1.3 if boost.has("patience") else 1.0) + delay
 	if g.waiter:
@@ -754,6 +762,14 @@ func _process(delta: float) -> void:
 			bar.set_jigger(jigger, pour_ml / maxf(pour_target * 1.5, 30.0), Recipes.SOURCES[pour_src].liquid)
 		else:
 			_add_to_vessel(rate * delta, Recipes.SOURCES[pour_src].liquid, false)
+	if not _float.is_empty():
+		_float_tick(delta)
+	if not _blend.is_empty() and _blend.on:
+		_blend_tick(delta)
+	if not _flame.is_empty() and not _flame.done:
+		_flame_tick()
+	if expecting == "flip" and _flip.get("t", 0.0) < 0.0 and time - _flip.offer > 2.6:
+		_skip_flip()
 	if shift_left <= 0.0 and cur.is_empty():
 		_end_shift()
 
@@ -782,6 +798,8 @@ func _refresh_ticket() -> void:
 	for c in ticket_steps.get_children():
 		c.queue_free()
 	var steps: Array = cur.drink.steps
+	if cur.drink.has("request"):
+		ticket_steps.add_child(_label("Guest asks: " + cur.drink.req_note, 19, C_GOLD))
 	for k in steps.size():
 		var s: Dictionary = steps[k]
 		var mark := "✓ " if k < cur.i else ("▶ " if k == cur.i else "○ ")
@@ -829,7 +847,7 @@ func _next_step() -> void:
 			_show_pointer(bar.garnish_spots[s.v], Recipes.GARNISH[s.v])
 			for k in opts:
 				actions.add_child(_button(Recipes.GARNISH[k], _choose.bind("garnish", k), 22, Color(0.2, 0.35, 0.2)))
-		"pour", "top", "dash":
+		"pour", "top", "dash", "layer":
 			_set_view("station")
 			expecting = "pick"
 			expect_src = Recipes.src(s.src)
@@ -869,6 +887,12 @@ func _next_step() -> void:
 			_set_view("work")
 			hint_label.text = "Strain it into the glass"
 			actions.add_child(_button("STRAIN", _strain, 30))
+		"blend":
+			_set_view("work")
+			_start_blend()
+		"flame":
+			_set_view("work")
+			_start_flame()
 
 
 func _choose(kind: String, value: String) -> void:
@@ -1098,7 +1122,7 @@ func _shake_step(amount: float) -> void:
 			tin_node.get_node("Lid").visible = false
 		Audio.play("good", -6.0)
 		show_toast("Ice cold!", C_GREEN, 44)
-		_next_step()
+		_offer_flip()
 
 
 func _tap_pick(p: Vector2) -> void:
@@ -1145,7 +1169,7 @@ func _start_pour_view() -> void:
 		hint_label.text = "Hold to top up to the line"
 	else:
 		pour_target = s.ml
-		hint_label.text = "Hold to pour, let go on the green line" + ("" if _hint_on() else " (how many ml?)")
+		hint_label.text = ("Measure it first: " if s.t == "layer" else "") + "Hold to pour, let go on the green line" + ("" if _hint_on() else " (how many ml?)")
 	# the bottle, tipped over the jigger (or over the glass when topping up)
 	if pour_bottle:
 		pour_bottle.queue_free()
@@ -1205,6 +1229,9 @@ func _pour_release() -> void:
 	if pour_bottle:
 		pour_bottle.queue_free()
 		pour_bottle = null
+	if cur.step.t == "layer":
+		_start_float(pour_ml, Recipes.SOURCES[pour_src].liquid)
+		return
 	if cur.step.t != "top":
 		# pick up the jigger, tip it into the tin or glass, put it back
 		var into: Node3D = tin_node if tin_node else glass_node
@@ -1347,6 +1374,14 @@ func _serve() -> void:
 			score += 30 * shift_stats.streak
 	else:
 		shift_stats.streak = 0
+	if cur.get("flair", false):
+		badges.append("FLAIR")
+		tip += 8
+		score += 40
+	if d.has("request") and stars >= 2.5:
+		badges.append("JUST HOW THEY LIKE IT")
+		tip += 10
+		score += 40
 	if boost.has("tips"):
 		tip = int(round(tip * 1.5))
 	Save.coins += tip
@@ -1478,6 +1513,7 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 					g.sip_next = randf_range(4.0, 7.0)
 					g.fill = maxf(0.1, g.get("fill", 0.6) - 0.15)
 					bar.set_fill(gl, g.fill, g.get("color", Color(0.8, 0.5, 0.2)))
+					bar.set_layer(gl, 0.0, 0.0, Color.WHITE)
 				amount = 0.0
 				g.look_amt = lerpf(g.look_amt, 0.0, 0.3)
 		gl.global_position = want
@@ -1632,6 +1668,7 @@ func _end_drink(keep_glass: bool) -> void:
 		stream.queue_free()
 		stream = null
 	_clear_props()
+	_clear_techniques()
 	cur = {}
 	if hud:
 		ticket_panel.visible = false
@@ -1708,7 +1745,7 @@ func _score_card(unlocked: String, new_best: bool) -> void:
 	var score_l := _label("0", 56, Color.WHITE)
 	hv.add_child(score_l)
 	var tw := create_tween()
-	tw.tween_method(func(x: float): score_l.text = "%d" % int(x), 0.0, float(shift_stats.score), 1.2).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_method(func(x: float): if is_instance_valid(score_l): score_l.text = "%d" % int(x), 0.0, float(shift_stats.score), 1.2).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	var best_l := _label("NEW BEST!" if new_best else "Best: %d" % Save.best_score, 22, C_GREEN if new_best else Color(1, 1, 1, 0.6))
 	hv.add_child(best_l)
 	if new_best:
@@ -2202,7 +2239,7 @@ func _update_hands(delta: float) -> void:
 			rg = 0.85
 			rd = fwd
 			rt = dash_bottle.global_transform.basis.y
-		elif spoon:
+		elif spoon and _float.is_empty():
 			var a: float = spoon.get_meta("a")
 			var c: Vector3 = spoon.get_meta("c")
 			spoon.position = c + Vector3(cos(a) * .012, .01, sin(a) * .012)
@@ -2329,3 +2366,348 @@ func _pick_bartender(id: String) -> void:
 	set_bartender(id)
 	_picking = false
 	show_menu()
+
+
+# =============================================================== techniques
+
+func _clear_techniques() -> void:
+	_float = {}
+	_blend = {}
+	_flip = {}
+	if blender:
+		blender.queue_free()
+		blender = null
+	for k in ["peel", "fire"]:
+		var n: Node3D = _flame.get(k)
+		if is_instance_valid(n):
+			n.queue_free()
+	_flame = {}
+	if jigger:
+		jigger.position = Bar.JIGGER_SPOT
+		jigger.rotation = Vector3.ZERO
+		bar.set_jigger(jigger, 0, Color.WHITE)
+
+
+## Fill of the glass, 0..1 of its bowl, as it looks right now.
+func _glass_fill() -> float:
+	var cap: float = Recipes.GLASSES[glass_node.get_meta("kind")].ml
+	return _fill_look(cur.vol / cap)
+
+
+## A meter on the right with a green zone from [param lo] to [param hi] (0..1 of its height).
+func _zone_meter(v: float, lo: float, hi: float, text: String, good: bool) -> void:
+	meter.visible = true
+	var h := meter.size.y
+	v = clampf(v, 0.0, 1.0)
+	meter_fill.position = Vector2(0, h * (1 - v))
+	meter_fill.size = Vector2(meter.size.x, h * v)
+	meter_fill.color = Color(1.0, 0.62, 0.2) if good else C_RED
+	meter_band.visible = true
+	meter_band.position = Vector2(0, h * (1 - hi))
+	meter_band.size = Vector2(meter.size.x, h * (hi - lo))
+	meter_label.text = text
+
+
+## --- Layering: the measured jigger is poured slowly over the back of a bar spoon (or down
+## the side, to sink). Holding speeds the flow up; too fast and the layer mixes in.
+const FLOAT_LO := 0.2
+const FLOAT_HI := 0.72
+
+func _start_float(ml: float, col: Color) -> void:
+	_set_view("work")
+	var sink: bool = cur.step.get("sink", false)
+	hint_label.text = ("Pour slowly down the side so it sinks" if sink else "Pour slowly over the spoon so it floats") + ". Keep the flow in the green"
+	_float = {"left": ml, "ml": ml, "flow": 0.0, "col": col, "broke": false, "holding": false, "sink": sink, "base": _glass_fill()}
+	var top := _glass_top()
+	jigger.position = glass_node.position + Vector3(0.06, top + 0.05, 0)
+	jigger.rotation.z = 0.5
+	if not sink:
+		_make_spoon()
+		var bw: Array = Bar.GLASS_BOWL[glass_node.get_meta("kind")]
+		spoon.set_meta("c", glass_node.position + Vector3(0, lerpf(bw[0], bw[1], _float.base) + 0.004, 0))
+		spoon.position = spoon.get_meta("c")
+		spoon.rotation.z = 0.25
+	var hold := _button("HOLD TO POUR GENTLY", func(): pass, 30)
+	hold.button_down.connect(func():
+		if not _float.is_empty():
+			_float.holding = true
+			Audio.loop("pour", true, -10.0))
+	hold.button_up.connect(func():
+		if not _float.is_empty():
+			_float.holding = false
+			Audio.loop("pour", false))
+	actions.add_child(hold)
+	_zone_meter(0.0, FLOAT_LO, FLOAT_HI, "flow", true)
+
+
+func _float_tick(delta: float) -> void:
+	var f := _float
+	f.flow = clampf(f.flow + (0.9 if f.holding else -1.6) * delta, 0.0, 1.0)
+	var ml := minf(f.flow * 32.0 * delta, f.left)
+	f.left -= ml
+	if f.flow > FLOAT_HI + 0.08 and not f.broke:
+		f.broke = true
+		cur.mistakes += 1
+		Audio.play("bad", -6.0)
+		show_toast("Too fast, it mixed in!", C_RED, 44)
+		bar.set_layer(glass_node, 0.0, 0.0, Color.WHITE)
+		_add_to_vessel(f.ml - f.left - ml, f.col, false)
+	if ml > 0.0:
+		if f.broke:
+			_add_to_vessel(ml, f.col, false)
+		else:
+			cur.vol += ml
+			var cap: float = Recipes.GLASSES[glass_node.get_meta("kind")].ml
+			var thick: float = (f.ml - f.left) / cap * 1.6
+			if f.sink:
+				bar.set_layer(glass_node, 0.0, minf(thick * 2.5, f.base * 0.45), f.col)
+			else:
+				bar.set_layer(glass_node, f.base, f.base + thick, f.col)
+	jigger.rotation.z = lerpf(0.5, 2.1, f.flow * 0.6 + (1.0 - f.left / f.ml) * 0.4)
+	bar.set_jigger(jigger, f.left / maxf(f.ml * 1.5, 30.0), f.col)
+	var calm: bool = f.flow <= FLOAT_HI
+	_zone_meter(f.flow, FLOAT_LO, FLOAT_HI, "%d ml" % int(f.ml - f.left), calm)
+	if f.left <= 0.05:
+		_finish_float()
+
+
+func _finish_float() -> void:
+	var f := _float
+	_float = {}
+	Audio.loop("pour", false)
+	_clear_actions()
+	meter.visible = false
+	if not f.broke:
+		Audio.play("good", -6.0)
+		show_toast("Beautiful layer!" if not f.sink else "Perfect sunrise!", C_GREEN, 48)
+	var tw := create_tween().set_trans(Tween.TRANS_SINE)
+	tw.tween_property(jigger, "rotation:z", 0.0, 0.12)
+	tw.tween_property(jigger, "position", Bar.JIGGER_SPOT, 0.18)
+	await tw.finished
+	bar.set_jigger(jigger, 0, Color.WHITE)
+	if not cur.is_empty():
+		_next_step()
+
+
+## --- Blending: hold the button, let go when it's smooth. Too short is icy, too long is watery.
+const BLEND_LO := 70.0
+const BLEND_HI := 95.0
+
+func _start_blend() -> void:
+	hint_label.text = "Hold to blend, let go when it's smooth (green)"
+	if blender == null:
+		blender = bar.make_blender()
+		bar.add_child(blender)
+	blender.position = Bar.TIN_SPOT + Vector3(0.08, 0, -0.05)
+	if tin_node:
+		tin_node.visible = false
+	var jar: Node3D = blender.get_node("Jar")
+	_blend = {"p": 0.0, "on": false, "base": cur.color, "fill": clampf(cur.vol / 450.0 + 0.3, 0.3, 0.85)}
+	bar.set_fill(jar, _blend.fill, cur.color)
+	var hold := _button("HOLD TO BLEND", func(): pass, 30)
+	hold.button_down.connect(_blend_hold.bind(true))
+	hold.button_up.connect(_blend_hold.bind(false))
+	actions.add_child(hold)
+	_zone_meter(0.0, BLEND_LO / 120.0, BLEND_HI / 120.0, "", true)
+
+
+func _blend_hold(on: bool) -> void:
+	if _blend.is_empty():
+		return
+	if on:
+		_blend.on = true
+		Audio.loop("shake", true, -8.0)
+		return
+	if not _blend.on:
+		return
+	_blend.on = false
+	Audio.loop("shake", false)
+	_finish_blend()
+
+
+func _blend_tick(delta: float) -> void:
+	_blend.p += 42.0 * delta
+	var p: float = _blend.p
+	var jar: Node3D = blender.get_node("Jar")
+	jar.position = Vector3(sin(time * 70.0) * 0.0018, .09, cos(time * 55.0) * 0.0015)
+	var smooth := clampf(p / 100.0, 0.0, 1.0)
+	bar.set_fill(jar, _blend.fill + 0.04 * sin(time * 30.0), (_blend.base as Color).lerp(Color(1, 1, 1), 0.3 * smooth))
+	var word := "icy" if p < BLEND_LO else ("smooth" if p <= BLEND_HI else "watery")
+	_zone_meter(p / 120.0, BLEND_LO / 120.0, BLEND_HI / 120.0, word, p <= BLEND_HI)
+	if p >= 120.0:
+		_blend_hold(false)
+
+
+func _finish_blend() -> void:
+	var p: float = _blend.p
+	_clear_actions()
+	meter.visible = false
+	if p >= BLEND_LO and p <= BLEND_HI:
+		cur.perfect += 1
+		cur.errs.append(0.0)
+		Audio.play("good", -6.0)
+		show_toast("Silky smooth!", C_GREEN, 48)
+	else:
+		cur.errs.append(8.0)
+		Audio.play("bad", -8.0)
+		show_toast("Still a bit icy" if p < BLEND_LO else "Blended too long, a bit watery", C_RED, 40)
+	cur.color = (_blend.base as Color).lerp(Color(1, 1, 1), 0.3 * clampf(p / 100.0, 0.0, 1.0))
+	# lift the jar off and pour it into the glass
+	var jar: Node3D = blender.get_node("Jar")
+	jar.position = Vector3(0, .09, 0)
+	var home := jar.global_position
+	_carry = jar
+	var over := glass_node.global_position + Vector3(0.1, _glass_top() + 0.13, 0)
+	var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(jar, "global_position", over, 0.3)
+	tw.parallel().tween_property(jar, "rotation:z", 1.9, 0.3)
+	tw.tween_callback(func():
+		Audio.play("pour", -8.0)
+		bar.set_fill(jar, 0.0, cur.color)
+		var t2 := create_tween()
+		t2.tween_method(func(f): if glass_node: bar.set_fill(glass_node, f, cur.color), 0.0, _fill_look(cur.vol * 1.2 / Recipes.GLASSES[glass_node.get_meta("kind")].ml), 0.45))
+	tw.tween_interval(0.65)
+	tw.tween_property(jar, "rotation:z", 0.0, 0.2)
+	tw.parallel().tween_property(jar, "global_position", home, 0.2)
+	await tw.finished
+	_carry = null
+	_blend = {}
+	if not cur.is_empty():
+		_next_step()
+
+
+## --- Flamed orange peel: a match between peel and drink, squeeze when the flame is biggest.
+func _start_flame() -> void:
+	hint_label.text = "Squeeze the peel through the flame when it's at its biggest"
+	var top := glass_node.position + Vector3(0, _glass_top(), 0)
+	var peel := bar.garnish("orange_twist", bar, top + Vector3(0.0, 0.13, 0.05))
+	peel.rotation.x = 1.2
+	var fire := Node3D.new()
+	fire.position = top + Vector3(0, 0.07, 0.03)
+	bar.add_child(fire)
+	bar.cyl(.0018, .0018, .07, bar.mat(Color(0.75, 0.6, 0.4)), Vector3(0.03, -0.02, 0.0), fire, 6).rotation.z = 1.0
+	var core := bar.sphere(.009, bar.emissive(Color(1.0, 0.6, 0.15), 5.0), Vector3.ZERO, fire)
+	core.name = "Core"
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.6, 0.25)
+	light.omni_range = 0.6
+	light.light_energy = 0.4
+	fire.add_child(light)
+	_flame = {"t0": time, "peel": peel, "fire": fire, "light": light, "done": false}
+	actions.add_child(_button("SQUEEZE", _squeeze, 30, Color(0.85, 0.45, 0.15)))
+	_zone_meter(0.0, 0.8, 1.0, "", true)
+
+
+func _flame_level() -> float:
+	if _flame.is_empty():
+		return 0.0
+	return (sin((time - _flame.t0) * 3.0 - PI / 2.0) + 1.0) / 2.0
+
+
+func _flame_tick() -> void:
+	var v := _flame_level()
+	var core: Node3D = _flame.fire.get_node("Core")
+	core.scale = Vector3(0.6 + v * 0.6, 0.9 + v * 1.8, 0.6 + v * 0.6) * (1.0 + 0.08 * sin(time * 40.0))
+	_flame.light.light_energy = 0.3 + v * 1.2
+	_zone_meter(v, 0.8, 1.0, "", true)
+
+
+func _squeeze() -> void:
+	if _flame.is_empty() or _flame.done:
+		return
+	_flame.done = true
+	_clear_actions()
+	meter.visible = false
+	var good := _flame_level() >= 0.78
+	var core: Node3D = _flame.fire.get_node("Core")
+	var tw := create_tween()
+	if good:
+		cur.perfect += 1
+		cur.errs.append(0.0)
+		Audio.play("good", -4.0)
+		show_toast("Flamed! Smell that orange", C_GOLD, 48)
+		_flame.light.light_energy = 7.0
+		tw.tween_property(core, "scale", Vector3(5, 7, 5), 0.12)
+		tw.parallel().tween_property(_flame.light, "light_energy", 0.0, 0.5)
+		tw.tween_property(core, "scale", Vector3.ZERO, 0.25)
+	else:
+		cur.errs.append(8.0)
+		Audio.play("bad", -8.0)
+		show_toast("Missed the flame", C_RED, 44)
+		tw.tween_property(core, "scale", Vector3.ZERO, 0.3)
+		tw.parallel().tween_property(_flame.light, "light_energy", 0.0, 0.3)
+	await tw.finished
+	await get_tree().create_timer(0.3).timeout
+	for k in ["peel", "fire"]:
+		var n: Node3D = _flame.get(k)
+		if is_instance_valid(n):
+			n.queue_free()
+	_flame = {}
+	if not cur.is_empty():
+		_next_step()
+
+
+## --- Flair: after a shake, flip the tin and catch it for bonus tips. Optional.
+func _offer_flip() -> void:
+	if tin_node == null:
+		_next_step()
+		return
+	expecting = "flip"
+	tin_node.get_node("Lid").visible = true
+	hint_label.text = "Flair time! FLIP the shaker for bonus tips"
+	_flip = {"t": -1.0, "offer": time}
+	actions.add_child(_button("FLIP IT", _do_flip, 30, Color(0.55, 0.3, 0.75)))
+	actions.add_child(_button("SKIP", _skip_flip, 24, Color(0.25, 0.2, 0.3)))
+
+
+func _skip_flip() -> void:
+	if expecting != "flip" or _flip.get("t", 0.0) >= 0.0:
+		return
+	expecting = ""
+	_flip = {}
+	_clear_actions()
+	if tin_node:
+		tin_node.get_node("Lid").visible = false
+	_next_step()
+
+
+func _do_flip() -> void:
+	if expecting != "flip" or _flip.get("t", 0.0) >= 0.0:
+		return
+	_clear_actions()
+	_flip.t = time
+	hint_label.text = "CATCH it as it comes down!"
+	Audio.play("click")
+	var tw := create_tween()
+	tw.tween_property(tin_node, "position", Bar.TIN_SPOT + Vector3(-0.06, 0.24, 0.03), 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(tin_node, "rotation:x", TAU, 0.9)
+	tw.tween_property(tin_node, "position", Bar.TIN_SPOT, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	actions.add_child(_button("CATCH", _catch, 34, Color(0.2, 0.6, 0.35)))
+	await tw.finished
+	if cur.is_empty() or tin_node == null:
+		return
+	if not _flip.get("caught", false):
+		_catch()
+	tin_node.rotation = Vector3.ZERO
+	tin_node.position = Bar.TIN_SPOT
+	tin_node.get_node("Lid").visible = false
+	await get_tree().create_timer(0.25).timeout
+	expecting = ""
+	_flip = {}
+	if not cur.is_empty():
+		_next_step()
+
+
+func _catch() -> void:
+	if _flip.is_empty() or _flip.get("caught", false) or _flip.t < 0.0:
+		return
+	_flip.caught = true
+	_clear_actions()
+	var dt: float = time - _flip.t
+	if dt >= 0.6 and dt <= 1.0:
+		cur.flair = true
+		Audio.play("good", -4.0)
+		show_toast("Smooth flair!", C_GOLD, 52)
+	else:
+		Audio.play("bad", -10.0)
+		show_toast("Whoa, nearly dropped it!" if dt < 0.6 else "Caught it, just about", Color(1, 1, 1), 40)

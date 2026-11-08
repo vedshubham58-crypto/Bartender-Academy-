@@ -21,7 +21,7 @@ FORMATS = ["guest", "cinematic", "learn", "pov"]
 SHOW = ["mojito", "margarita", "espresso_martini", "cosmopolitan", "pina_colada", "tequila_sunrise",
         "whisky_sour", "daiquiri", "negroni", "long_island", "moscow_mule", "old_fashioned",
         "white_russian", "bees_knees", "lemon_drop", "sidecar", "gimlet", "manhattan", "bay_breeze",
-        "planters_punch", "kamikaze", "gin_fizz", "spritz", "mexican_mule"]
+        "planters_punch", "kamikaze", "gin_fizz", "spritz", "mexican_mule", "frozen_margarita"]
 THEMES = ["warm", "blue", "gold"] # the pink lights look too red once blurred behind the clip
 SKINS = ["steel", "copper", "gold", "black"]
 BARTENDERS = ["remy", "louise"]
@@ -156,6 +156,7 @@ def main():
     ap.add_argument("--format", default="", help="guest, cinematic, learn, pov, or all (one of each)")
     ap.add_argument("--cta", default="Coming soon on Google Play")
     ap.add_argument("--date", default=datetime.date.today().isoformat())
+    ap.add_argument("--drinks", default="", help="comma-separated drink ids instead of the daily rotation")
     a = ap.parse_args()
     a.out = os.path.abspath(a.out)
     os.makedirs(a.out, exist_ok=True)
@@ -172,7 +173,7 @@ def main():
     for n, fmt in enumerate(formats, 1):
         # Rotate drinks, looks and bartender day by day so the feed stays varied.
         k = (day * 4 + n) * 2
-        drinks = [SHOW[k % len(SHOW)], SHOW[(k + 7) % len(SHOW)]]
+        drinks = a.drinks.split(",") if a.drinks else [SHOW[k % len(SHOW)], SHOW[(k + 7) % len(SHOW)]]
         theme, skin = THEMES[(day + n) % len(THEMES)], SKINS[(day * 3 + n) % 4]
         bartender = BARTENDERS[(day + n) % 2]
         base = os.path.join(a.out, f"raw-{n}")
