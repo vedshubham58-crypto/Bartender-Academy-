@@ -156,7 +156,11 @@ func make(gi: int, shots: bool) -> void:
 					if shots:
 						await shot(id + "_flip")
 					main._catch()
-					await _secs(0.7)
+					var g4 := 0
+					while main.expecting == "flip" and g4 < 200:
+						g4 += 1
+						await get_tree().process_frame
+					await _frames(2)
 			"stir":
 				var ev := InputEventScreenDrag.new()
 				ev.relative = Vector2(80, 60)

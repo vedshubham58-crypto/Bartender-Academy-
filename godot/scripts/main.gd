@@ -2678,10 +2678,11 @@ func _do_flip() -> void:
 	_flip.t = time
 	hint_label.text = "CATCH it as it comes down!"
 	Audio.play("click")
-	var tw := create_tween()
+	# up for 0.45 s and back down for 0.45 s, spinning end over end the whole time
+	var tw := create_tween().set_parallel()
 	tw.tween_property(tin_node, "position", Bar.TIN_SPOT + Vector3(-0.06, 0.24, 0.03), 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(tin_node, "rotation:x", TAU, 0.9)
-	tw.tween_property(tin_node, "position", Bar.TIN_SPOT, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(tin_node, "rotation:x", TAU, 0.9)
+	tw.tween_property(tin_node, "position", Bar.TIN_SPOT, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(0.45)
 	actions.add_child(_button("CATCH", _catch, 34, Color(0.2, 0.6, 0.35)))
 	await tw.finished
 	if cur.is_empty() or tin_node == null:
