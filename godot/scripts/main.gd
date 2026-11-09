@@ -2219,11 +2219,8 @@ func _update_hands(delta: float) -> void:
 		if _carry:
 			hold = _carry.global_position + Vector3(0, 0.035, 0)
 			hold_g = 0.95 if not _flame.is_empty() else 0.85
-			if not _float.is_empty():
-				hold_side = 1.0 # the jigger tips into the glass from the right
 			if not _flame.is_empty():
-				hold = _carry.global_position + right * 0.01 # pinched, squeezed over the glass
-				hold_side = 1.0
+				hold = _carry.global_position # pinched, squeezed over the glass
 		elif _serving:
 			r = _serving.position + Vector3(0.02, 0.07, 0.05)
 			rg = 0.45
@@ -2244,8 +2241,8 @@ func _update_hands(delta: float) -> void:
 			var a: float = spoon.get_meta("a")
 			var c: Vector3 = spoon.get_meta("c")
 			spoon.position = c + Vector3(cos(a) * .012, .01, sin(a) * .012)
-			hold = spoon.to_global(Vector3(0, .18, 0))
-			hold_g = 0.65
+			hold = spoon.to_global(Vector3(0, .15, 0))
+			hold_g = 0.9
 		elif muddler:
 			hold = muddler.to_global(Vector3(0, .17, 0))
 			hold_g = 0.9
@@ -2427,9 +2424,9 @@ func _start_float(ml: float, col: Color) -> void:
 	_clear_actions()
 	_float = {"left": ml, "ml": ml, "flow": 0.0, "col": col, "broke": false, "holding": false, "sink": sink, "base": _glass_fill()}
 	var top := _glass_top()
-	jigger.position = glass_node.position + Vector3(0.075, top + 0.04, 0)
+	jigger.position = glass_node.position + Vector3(-0.07, top + 0.04, 0)
+	jigger.rotation.z = -0.5
 	_carry = jigger
-	jigger.rotation.z = 0.5
 	if not sink:
 		_make_spoon()
 		var bw: Array = Bar.GLASS_BOWL[glass_node.get_meta("kind")]
@@ -2472,7 +2469,8 @@ func _float_tick(delta: float) -> void:
 				bar.set_layer(glass_node, 0.0, minf(thick * 2.5, f.base * 0.45), f.col)
 			else:
 				bar.set_layer(glass_node, f.base, f.base + thick, f.col)
-	jigger.rotation.z = lerpf(0.5, 2.1, f.flow * 0.6 + (1.0 - f.left / f.ml) * 0.4)
+	# held on the glass's left by the left hand, so it tips the other way, into the glass
+	jigger.rotation.z = -lerpf(0.5, 2.1, f.flow * 0.6 + (1.0 - f.left / f.ml) * 0.4)
 	bar.set_jigger(jigger, f.left / maxf(f.ml * 1.5, 30.0), f.col)
 	var calm: bool = f.flow <= FLOAT_HI
 	_zone_meter(f.flow, FLOAT_LO, FLOAT_HI, "%d ml" % int(f.ml - f.left), calm)
@@ -2590,8 +2588,8 @@ func _finish_blend() -> void:
 func _start_flame() -> void:
 	hint_label.text = "Squeeze the peel through the flame when it's at its biggest"
 	var top := glass_node.position + Vector3(0, _glass_top(), 0)
-	var peel := bar.garnish("orange_twist", bar, top + Vector3(0.05, 0.12, 0.03))
-	peel.rotation = Vector3(1.2, 0.0, 0.4)
+	var peel := bar.garnish("orange_twist", bar, top + Vector3(-0.04, 0.12, 0.03))
+	peel.rotation = Vector3(1.2, 0.0, -0.4)
 	var fire := Node3D.new()
 	fire.position = top + Vector3(0, 0.07, 0.03)
 	bar.add_child(fire)

@@ -115,6 +115,7 @@ func make(gi: int, shots: bool) -> void:
 					main.stream.visible = true
 					while main.pour_ml < main.pour_target - 0.5:
 						await get_tree().process_frame
+					await _frames(4) # let the hands settle before any screenshot
 					# slow test frames run the real-time pour past the line, so stop where a good player would
 					main.pour_ml = main.pour_target + randf_range(-1.5, 1.5)
 					main._pour_t0 = Time.get_ticks_msec() - int(main.pour_ml / (main.TOP_RATE if s.t == "top" else main.POUR_RATE) * 1000.0)
