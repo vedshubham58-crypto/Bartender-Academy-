@@ -76,8 +76,9 @@ def render(godot, avi, stats, fmt, drinks, theme, skin, bartender):
            "--fixed-fps", "30", "--resolution", "1280x720", "res://tests/promo.tscn", "--",
            f"--format={fmt}", "--drinks=" + ",".join(drinks), f"--theme={theme}", f"--skin={skin}",
            f"--bartender={bartender}", f"--stats={stats}"]
-    # a script error leaves Godot running (and recording) forever, so give up after 15 minutes
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, timeout=900)
+    # a script error leaves Godot running (and recording) forever, so give up after 40 minutes
+    # (a long two-drink clip takes over 15 minutes on GitHub's runners)
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, timeout=2400)
     with open(stats) as f:
         return json.load(f)
 
