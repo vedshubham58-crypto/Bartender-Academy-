@@ -217,6 +217,7 @@ func make(gi: int, shots: bool) -> void:
 	await _secs(0.5)
 	if shots:
 		await shot(id + "_ready")
+	await _before_serve()
 	main._serve()
 	await _secs(0.9)
 	if shots:
@@ -226,6 +227,11 @@ func make(gi: int, shots: bool) -> void:
 
 ## A breath between steps (the promo recorder slows down here so each step can be seen).
 func _between_steps() -> void:
+	pass
+
+
+## The drink is finished and still on the mat (the promo recorder can look at it here).
+func _before_serve() -> void:
 	pass
 
 

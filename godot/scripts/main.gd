@@ -1346,7 +1346,12 @@ func _pour_release() -> void:
 ## Adds liquid to the tin (if this drink is shaken) or straight to the glass.
 func _add_to_vessel(ml: float, color: Color, splash: bool) -> void:
 	var total: float = cur.vol + ml
-	var c: Color = color if cur.vol <= 0 else cur.color.lerp(color, ml / total)
+	# colour mixes by how strongly coloured each pour is, not just by volume: a splash of
+	# red bitter tints a whole glass of gin, but clear gin hardly pales the red (a real Negroni)
+	var w: float = ml * (0.15 + (maxf(color.r, maxf(color.g, color.b)) - minf(color.r, minf(color.g, color.b))))
+	var cw: float = cur.get("cw", 0.0)
+	var c: Color = color if cur.vol <= 0 or cw <= 0.0 else cur.color.lerp(color, w / (cw + w))
+	cur.cw = cw + w
 	cur.vol = total
 	cur.color = c
 	if splash:

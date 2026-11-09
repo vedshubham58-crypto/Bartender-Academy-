@@ -355,9 +355,11 @@ func set_fill(g: Node3D, fill: float, color: Color) -> void:
 	liq.mesh = lathe(profile([[0, b[0]], [b[2] * .96, b[0]], [rt * .96, top], [0, top]]), 28)
 	# clear spirits get a warm tint and a soft glow so you can see the level in the glass
 	var lm := liq.material_override as StandardMaterial3D
-	lm.albedo_color = Color(color.lerp(Color(1.0, 0.85, 0.55), 0.25), 0.85)
+	# (strongly coloured drinks keep their own colour: a Negroni stays deep red)
+	var clear: float = 1.0 - clampf((maxf(color.r, maxf(color.g, color.b)) - minf(color.r, minf(color.g, color.b))) * 1.8, 0.0, 1.0)
+	lm.albedo_color = Color(color.lerp(Color(1.0, 0.85, 0.55), 0.25 * clear), 0.85 + 0.1 * (1.0 - clear))
 	lm.emission_enabled = true
-	lm.emission = color.lerp(Color(1.0, 0.8, 0.5), 0.4)
+	lm.emission = color.lerp(Color(1.0, 0.8, 0.5), 0.4 * clear)
 	lm.emission_energy_multiplier = 0.35
 
 

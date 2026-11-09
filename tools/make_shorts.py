@@ -9,6 +9,8 @@
 #   cinematic  film-style angles: wide rooftop, side of the bar, close-ups of the pour
 #   learn      one drink, every step written on screen, the home recipe in the caption
 #   pov        the classic first-person view with the game screen
+#   mistake    one drink with a deliberate mistake for bartenders to spot (answer in the .json)
+#   regulars   comedy: guests every bartender knows
 # Without --format the format rotates through that list, one per posting day.
 #
 # Run from the repo root (needs godot on PATH, ffmpeg, and a display, e.g. xvfb-run):
@@ -16,7 +18,9 @@
 # Used by .github/workflows/shorts.yml (Monday, Wednesday and Friday).
 import argparse, datetime, json, os, random, subprocess, sys
 
-FORMATS = ["guest", "cinematic", "learn", "pov"]
+FORMATS = ["guest", "mistake", "cinematic", "regulars", "learn", "pov"]
+# Drinks the promo knows a deliberate mistake for (godot/tests/promo.gd MISTAKES).
+MISTAKE_DRINKS = ["negroni", "margarita", "espresso_martini", "old_fashioned", "mojito"]
 # Drinks with the most to watch (shake, muddle, layers, colour).
 SHOW = ["mojito", "margarita", "espresso_martini", "cosmopolitan", "pina_colada", "tequila_sunrise",
         "whisky_sour", "daiquiri", "negroni", "long_island", "moscow_mule", "old_fashioned",
@@ -34,6 +38,10 @@ HOOKS = {
                   "This is what a bar shift looks like", "Pour, shake, serve"],
     "learn": ["Learn {a_d1}, step by step", "How {a_d1} is really made",
               "Save this {d1} recipe", "Bartender school: the {d1}"],
+    "mistake": ["Bartenders: spot the mistake", "Only real bartenders will spot it",
+                "One thing is wrong here. What is it?"],
+    "regulars": ["Guests every bartender knows", "Tag a bartender who has heard this",
+                 "Every bar has this guest"],
     "pov": ["POV: your first shift at a rooftop bar", "Perfect pour or fail?",
             "Only real bartenders get this right", "Which one would you order?"],
 }
@@ -41,6 +49,8 @@ TITLES = {
     "guest": ["A guest orders {a_d1} at the rooftop bar #shorts", "Making {a_d1} for a guest #shorts"],
     "cinematic": ["Making {a_d1} at a rooftop bar #shorts", "Satisfying cocktail making: {d1} and {d2} #shorts"],
     "learn": ["How to make {a_d1}, step by step #shorts", "Real {d1} recipe in a bartender game #shorts"],
+    "mistake": ["Bartenders, spot the mistake in this {d1} #shorts", "What's wrong with this {d1}? #shorts"],
+    "regulars": ["Guests every bartender knows #shorts", "Every bar has this guest #shorts"],
     "pov": ["Can you make {a_d1} this fast? #shorts", "Bartender game: {d1} or {d2}? #shorts"],
 }
 CAPTIONS = {
@@ -49,6 +59,10 @@ CAPTIONS = {
     "cinematic": ["Walk into a rooftop bar and learn to mix real cocktails, one pour at a time.\n\n{cta}",
                   "Learn cocktail making behind a real-looking bar and upskill like a pro.\n\n{cta}"],
     "learn": ["How to make {a_d1} at home:\n{home}\n\nLearn every recipe behind the bar in Bartender: Cocktail Academy.\n\n{cta}"],
+    "mistake": ["One thing in this {d1} is wrong. Bartenders, tell us in the comments. Answer tomorrow.\n\n{cta}",
+                "Real bartenders will see it straight away. What's wrong with this {d1}?\n\n{cta}"],
+    "regulars": ["Tag the bartender who has heard every one of these.\n\n{cta}",
+                 "Which guest do you get the most? Tell us in the comments.\n\n{cta}"],
     "pov": ["{d1} or {d2}? Tell us which one you'd order.\n\n{cta}",
             "Learn to mix cocktails behind the bar and upskill like a pro. Comment a cocktail and we'll make it next.\n\n{cta}"],
 }
@@ -62,7 +76,8 @@ def render(godot, avi, stats, fmt, drinks, theme, skin, bartender):
            "--fixed-fps", "30", "--resolution", "1280x720", "res://tests/promo.tscn", "--",
            f"--format={fmt}", "--drinks=" + ",".join(drinks), f"--theme={theme}", f"--skin={skin}",
            f"--bartender={bartender}", f"--stats={stats}"]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
+    # a script error leaves Godot running (and recording) forever, so give up after 15 minutes
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, timeout=900)
     with open(stats) as f:
         return json.load(f)
 
@@ -153,7 +168,7 @@ def main():
     ap.add_argument("--out", default="shorts")
     ap.add_argument("--godot", default="godot")
     ap.add_argument("--count", type=int, default=1)
-    ap.add_argument("--format", default="", help="guest, cinematic, learn, pov, or all (one of each)")
+    ap.add_argument("--format", default="", help="guest, mistake, cinematic, regulars, learn, pov, or all (one of each)")
     ap.add_argument("--cta", default="Coming soon on Google Play")
     ap.add_argument("--date", default=datetime.date.today().isoformat())
     ap.add_argument("--drinks", default="", help="comma-separated drink ids instead of the daily rotation")
@@ -174,6 +189,8 @@ def main():
         # Rotate drinks, looks and bartender day by day so the feed stays varied.
         k = (day * 4 + n) * 2
         drinks = a.drinks.split(",") if a.drinks else [SHOW[k % len(SHOW)], SHOW[(k + 7) % len(SHOW)]]
+        if fmt == "mistake" and not a.drinks:
+            drinks = [MISTAKE_DRINKS[(day + n) % len(MISTAKE_DRINKS)]]
         theme, skin = THEMES[(day + n) % len(THEMES)], SKINS[(day * 3 + n) % 4]
         bartender = BARTENDERS[(day + n) % 2]
         base = os.path.join(a.out, f"raw-{n}")
@@ -189,6 +206,10 @@ def main():
                 "home": "\n".join(f"{i}. {h}" for i, h in enumerate(home, 1))}
         hook = rnd.choice(HOOKS[fmt]).format(**fill)
         below = f"How to make {article(d1)}" if fmt == "learn" else (d1 if d1 == d2 else f"{d1}  +  {d2}")
+        if fmt == "mistake":
+            below = f"What's wrong with this {d1}?"
+        elif fmt == "regulars":
+            below = "Every bartender knows these guests"
         name = os.path.join(a.out, f"bartender-{a.date}-{n}")
         to_vertical(base + ".avi", name + ".mp4", a.out, wrap(hook), below, a.cta,
                     duration(base + ".avi"), s.get("events", []))
@@ -198,7 +219,7 @@ def main():
         with open(name + ".json", "w") as f:
             json.dump({"app": "Bartender: Cocktail Academy", "format": fmt, "title": title, "caption": caption,
                        "hashtags": tags, "hook": hook, "drinks": [x["name"] for x in s["drinks"]],
-                       "made_for_kids": False, "stats": s}, f, indent=2, ensure_ascii=False)
+                       "made_for_kids": False, "answer": s.get("answer", ""), "stats": s}, f, indent=2, ensure_ascii=False)
         for ext in (".avi", ".json"):
             if os.path.exists(base + ext):
                 os.remove(base + ext)
