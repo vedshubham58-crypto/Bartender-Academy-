@@ -550,17 +550,25 @@ func show_menu() -> void:
 	var shop_b := _button("SHOP  ● %d" % Save.coins, show_shop, 20, Color(0.55, 0.4, 0.1))
 	shop_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mrow.add_child(shop_b)
-	v.add_child(_button("BARTENDER: %s" % BARTENDERS.get(Save.bartender, BARTENDERS["remy"]).name, show_bartender_pick, 20, Color(0.25, 0.2, 0.3)))
-	var mt := "MOCKTAIL MODE: %s" % ("ON" if Save.mocktail else "OFF")
+	# bartender and mocktail share a row so the drink-responsibly line stays on screen
+	var brow := HBoxContainer.new()
+	brow.add_theme_constant_override("separation", 12)
+	v.add_child(brow)
+	var bt_b := _button("BARTENDER: %s" % BARTENDERS.get(Save.bartender, BARTENDERS["remy"]).name, show_bartender_pick, 20, Color(0.25, 0.2, 0.3))
+	bt_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	brow.add_child(bt_b)
+	var mt := "MOCKTAIL: %s" % ("ON" if Save.mocktail else "OFF")
 	if Save.mocktail_locked():
 		mt += " (under 18)"
-	v.add_child(_button(mt, func():
+	var mt_b := _button(mt, func():
 		if Save.mocktail_locked():
 			return
 		Save.mocktail = not Save.mocktail
 		Save.save()
 		bar.build_rail()
-		show_menu(), 20, Color(0.2, 0.35, 0.25)))
+		show_menu(), 20, Color(0.2, 0.35, 0.25))
+	mt_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	brow.add_child(mt_b)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	v.add_child(row)
