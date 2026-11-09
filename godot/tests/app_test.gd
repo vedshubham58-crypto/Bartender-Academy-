@@ -125,12 +125,14 @@ func make(gi: int, shots: bool) -> void:
 						await _frames(2)
 						# pulse the pour so the flow stays gentle
 						var g2 := 0
+						var shot_done := false
 						while not main._float.is_empty() and g2 < 900:
 							g2 += 1
 							main._float.holding = main._float.flow < 0.5
+							if shots and not shot_done and main._float.left < main._float.ml * 0.5:
+								shot_done = true
+								await shot("%s_%d_layer" % [id, i])
 							await get_tree().process_frame
-						if shots:
-							await shot("%s_%d_layer" % [id, i])
 						await _secs(0.5)
 					else:
 						await main._pour_release()
@@ -152,9 +154,10 @@ func make(gi: int, shots: bool) -> void:
 				if main.expecting == "flip":
 					await _secs(0.3)
 					main._do_flip()
-					await _secs(0.75)
+					await _secs(0.35)
 					if shots:
 						await shot(id + "_flip")
+					await _secs(0.35)
 					main._catch()
 					var g4 := 0
 					while main.expecting == "flip" and g4 < 200:
@@ -191,10 +194,10 @@ func make(gi: int, shots: bool) -> void:
 				while main._flame_level() < 0.9 and g3 < 300:
 					g3 += 1
 					await get_tree().process_frame
-				main._squeeze()
-				await _frames(4)
 				if shots:
 					await shot(id + "_flame")
+				main._squeeze()
+				await _frames(4)
 				await _secs(0.9)
 		await _frames(2)
 		if main.cur.is_empty() or main.cur.i == i:

@@ -2208,16 +2208,22 @@ func _update_hands(delta: float) -> void:
 	var ld := Vector3.ZERO
 	var rt := Vector3.UP
 	var lt := Vector3.UP
+	var hold := Vector3.INF ## a tool held in one hand: the point the fingers close round
+	var hold_g := 0.8
+	var hold_side := 0.0 ## 1 right hand, -1 left hand, 0 whichever side the tool is on
 	# hidden while picking a bottle, so the body never covers the speed rail
 	me.node.visible = in_shift and expecting != "pick"
 	if host:
 		host.visible = not in_shift and not _picking
 	if in_shift and not cur.is_empty():
 		if _carry:
-			r = _carry.global_position + Vector3(0, 0.05, 0) - fwd * 0.045
-			rg = 0.8
-			rd = fwd
-			rt = Vector3.UP
+			hold = _carry.global_position + Vector3(0, 0.035, 0)
+			hold_g = 0.95 if not _flame.is_empty() else 0.85
+			if not _float.is_empty():
+				hold_side = 1.0 # the jigger tips into the glass from the right
+			if not _flame.is_empty():
+				hold = _carry.global_position + right * 0.01 # pinched, squeezed over the glass
+				hold_side = 1.0
 		elif _serving:
 			r = _serving.position + Vector3(0.02, 0.07, 0.05)
 			rg = 0.45
@@ -2229,11 +2235,6 @@ func _update_hands(delta: float) -> void:
 			rg = 0.8
 			rd = (fwd - axis * fwd.dot(axis)).normalized()
 			rt = axis
-			if cur.step.t != "top":
-				l = jigger.global_position + Vector3(-0.13, 0.03, 0.04)
-				lg = 0.3
-				ld = (fwd + right * 0.3 + Vector3.DOWN * 0.15).normalized()
-				lt = right
 		elif dash_bottle:
 			r = dash_bottle.to_global(Vector3(0, .06, 0))
 			rg = 0.85
@@ -2243,35 +2244,24 @@ func _update_hands(delta: float) -> void:
 			var a: float = spoon.get_meta("a")
 			var c: Vector3 = spoon.get_meta("c")
 			spoon.position = c + Vector3(cos(a) * .012, .01, sin(a) * .012)
-			r = spoon.to_global(Vector3(0, .19, 0))
-			rg = 0.6
-			rd = Vector3.DOWN
-			rt = fwd
-			if glass_node:
-				l = glass_node.position + Vector3(-0.05, 0.06, 0.01)
-				lg = 0.6
-				ld = right
+			hold = spoon.to_global(Vector3(0, .18, 0))
+			hold_g = 0.65
 		elif muddler:
-			r = muddler.to_global(Vector3(0, .2, 0))
-			rg = 0.9
-			rd = fwd
-			rt = Vector3.UP
-			if glass_node:
-				l = glass_node.position + Vector3(-0.05, 0.05, 0.01)
-				lg = 0.6
-				ld = right
+			hold = muddler.to_global(Vector3(0, .17, 0))
+			hold_g = 0.9
 		elif tin_node and (expecting == "shake" or _straining):
 			var up := tin_node.global_transform.basis.y.normalized()
 			if expecting == "shake":
 				# one hand grips the cap end from the right, the other the base from the left,
 				# far enough apart that the hands never meet
+				# right hand wraps the top tin, left hand wraps the base, fingers round the steel
 				var side := tin_node.global_transform.basis.x.normalized()
-				r = tin_node.to_global(Vector3(0, .21, 0)) + side * 0.075 - fwd * 0.03
-				l = tin_node.to_global(Vector3(0, .03, 0)) - side * 0.075 - fwd * 0.03
-				rg = 0.8
-				lg = 0.8
-				rd = -side
-				ld = side
+				r = tin_node.to_global(Vector3(0, .2, 0)) + side * 0.052 - fwd * 0.02
+				l = tin_node.to_global(Vector3(0, .05, 0)) - side * 0.052 - fwd * 0.02
+				rg = 0.9
+				lg = 0.9
+				rd = (-side + fwd * 0.25).normalized()
+				ld = (side + fwd * 0.25).normalized()
 				rt = up
 				lt = up
 			else:
@@ -2289,6 +2279,22 @@ func _update_hands(delta: float) -> void:
 		rg = 0.55
 		rd = (fwd + Vector3.DOWN * 0.6).normalized()
 		rt = -right
+	# a held tool is gripped from its outer side with fingers wrapped round it, by the hand on
+	# that side of the screen (the glass sits left of centre), so no arm reaches across
+	if hold != Vector3.INF:
+		var o := hold_side if hold_side != 0.0 else (-1.0 if (hold - cam.global_position).dot(right) < -0.06 else 1.0)
+		var wrist := hold + right * (0.055 * o) - fwd * 0.015
+		var wrap := (-right * o + fwd * 0.25).normalized()
+		if o > 0.0:
+			r = wrist
+			rg = hold_g
+			rd = wrap
+			rt = Vector3.UP
+		else:
+			l = wrist
+			lg = hold_g
+			ld = wrap
+			lt = Vector3.UP
 	me.target["Right"] = r
 	me.target["Left"] = l
 	me.grip["Right"] = rg
@@ -2371,6 +2377,7 @@ func _pick_bartender(id: String) -> void:
 # =============================================================== techniques
 
 func _clear_techniques() -> void:
+	_carry = null
 	_float = {}
 	_blend = {}
 	_flip = {}
@@ -2417,9 +2424,11 @@ func _start_float(ml: float, col: Color) -> void:
 	_set_view("work")
 	var sink: bool = cur.step.get("sink", false)
 	hint_label.text = ("Pour slowly down the side so it sinks" if sink else "Pour slowly over the spoon so it floats") + ". Keep the flow in the green"
+	_clear_actions()
 	_float = {"left": ml, "ml": ml, "flow": 0.0, "col": col, "broke": false, "holding": false, "sink": sink, "base": _glass_fill()}
 	var top := _glass_top()
-	jigger.position = glass_node.position + Vector3(0.06, top + 0.05, 0)
+	jigger.position = glass_node.position + Vector3(0.075, top + 0.04, 0)
+	_carry = jigger
 	jigger.rotation.z = 0.5
 	if not sink:
 		_make_spoon()
@@ -2484,6 +2493,7 @@ func _finish_float() -> void:
 	tw.tween_property(jigger, "rotation:z", 0.0, 0.12)
 	tw.tween_property(jigger, "position", Bar.JIGGER_SPOT, 0.18)
 	await tw.finished
+	_carry = null
 	bar.set_jigger(jigger, 0, Color.WHITE)
 	if not cur.is_empty():
 		_next_step()
@@ -2580,8 +2590,8 @@ func _finish_blend() -> void:
 func _start_flame() -> void:
 	hint_label.text = "Squeeze the peel through the flame when it's at its biggest"
 	var top := glass_node.position + Vector3(0, _glass_top(), 0)
-	var peel := bar.garnish("orange_twist", bar, top + Vector3(0.0, 0.13, 0.05))
-	peel.rotation.x = 1.2
+	var peel := bar.garnish("orange_twist", bar, top + Vector3(0.05, 0.12, 0.03))
+	peel.rotation = Vector3(1.2, 0.0, 0.4)
 	var fire := Node3D.new()
 	fire.position = top + Vector3(0, 0.07, 0.03)
 	bar.add_child(fire)
@@ -2593,6 +2603,7 @@ func _start_flame() -> void:
 	light.omni_range = 0.6
 	light.light_energy = 0.4
 	fire.add_child(light)
+	_carry = peel
 	_flame = {"t0": time, "peel": peel, "fire": fire, "light": light, "done": false}
 	actions.add_child(_button("SQUEEZE", _squeeze, 30, Color(0.85, 0.45, 0.15)))
 	_zone_meter(0.0, 0.8, 1.0, "", true)
@@ -2643,6 +2654,7 @@ func _squeeze() -> void:
 		if is_instance_valid(n):
 			n.queue_free()
 	_flame = {}
+	_carry = null
 	if not cur.is_empty():
 		_next_step()
 

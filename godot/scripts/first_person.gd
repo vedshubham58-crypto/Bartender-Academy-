@@ -16,6 +16,9 @@ var thumb_dir := {"Right": Vector3.UP, "Left": Vector3.UP}
 var _cur := {"Right": Vector3.ZERO, "Left": Vector3.ZERO}
 var _grip := {"Right": 0.2, "Left": 0.2}
 var _started := false
+## How far the neck sits under your eyes. Close to a real body's, so the arms reach down into
+## the station instead of lying flat across the screen.
+const NECK_DROP := 0.19
 
 
 func _init(model_name: String, parent: Node3D) -> void:
@@ -57,9 +60,10 @@ func update(cam: Camera3D, dt: float) -> void:
 	var right := fwd.cross(Vector3.UP)
 	node.rotation = Vector3(0, atan2(fwd.x, fwd.z), 0)
 	# neck just under the camera, a little in front, so the shoulders can reach the station
-	var want := cam.global_position + fwd * 0.1 + Vector3.DOWN * 0.3
+	var want := cam.global_position + fwd * 0.06 + Vector3.DOWN * NECK_DROP
 	node.global_position += want - People.world_pos(s, "Neck")
-	var k := 1.0 - exp(-dt * 20.0)
+	# eased, so a hand glides to the next tool instead of jumping
+	var k := 1.0 - exp(-minf(dt, 0.05) * 12.0)
 	for side in ["Right", "Left"]:
 		var t: Vector3 = target[side]
 		if t == Vector3.INF:
