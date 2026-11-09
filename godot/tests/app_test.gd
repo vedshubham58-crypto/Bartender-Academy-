@@ -17,11 +17,19 @@ func _ready() -> void:
 	Save.best = {}
 	Save.unlocked = Recipes.DRINKS.size() if "--drinks=" in " ".join(args) else 8
 	Save.mocktail = "--mocktail" in args
+	Save.gift_day = Save.day_key(1) # played yesterday: today's tips jar is waiting
+	Save.day_streak = 2
+	Save.challenge_day = ""
 	main = load("res://scenes/main.tscn").instantiate()
 	main.guests_leave = false # the test serves the same four seats
 	add_child(main)
 	await _frames(20)
 	await shot("menu")
+	check(Save.open_gift() == Save.gift_coins(3) and Save.day_streak == 3, "tips jar opens once, day 3")
+	check(Save.open_gift() == 0, "tips jar only once a day")
+	main.show_menu()
+	await _frames(10)
+	await shot("menu_daily")
 	if "--picker" in args:
 		main.show_bartender_pick()
 		await _secs(1.5)
@@ -233,3 +241,9 @@ func _frames(n: int) -> void:
 
 func _secs(t: float) -> void:
 	await get_tree().create_timer(t).timeout
+
+
+func check(ok: bool, what: String) -> void:
+	if not ok:
+		fails += 1
+		print("FAIL: ", what)

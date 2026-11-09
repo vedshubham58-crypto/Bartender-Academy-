@@ -78,6 +78,25 @@ func _initialize() -> void:
 	check(any_req > 10, "plenty of drinks can take a request")
 	check(str(R.drink("margarita")) == before, "a request leaves the real recipe alone")
 	check(R.drink("frozen_margarita").method == "Blend", "frozen margarita is blended")
+	# daily loop: tips jar streak and the daily challenge
+	var keep := [S.gift_day, S.day_streak, S.challenge_day, S.coins]
+	S.gift_day = S.day_key(1)
+	S.day_streak = 3
+	check(S.gift_waiting() and S.next_streak() == 4, "played yesterday: streak goes on")
+	S.gift_day = S.day_key(2)
+	check(S.next_streak() == 1, "missed a day: streak starts again")
+	check(S.gift_coins(1) == S.GIFTS[0] and S.gift_coins(8) == S.GIFTS[0] and S.gift_coins(7) == S.GIFTS[6], "jar ladder repeats each week")
+	check(S.day_key(0) != S.day_key(1) and S.day_key().length() == 10, "day keys are dates")
+	S.challenge_day = ""
+	var cd: Dictionary = S.challenge_drink()
+	check(cd == S.challenge_drink(), "same challenge all day")
+	check(S.try_challenge(cd.id, 2.5) == 0, "challenge needs 3 stars")
+	check(S.try_challenge(cd.id, 3.0) == S.CHALLENGE_COINS and S.challenge_done(), "3-star challenge drink wins")
+	check(S.try_challenge(cd.id, 3.0) == 0, "challenge pays once a day")
+	S.gift_day = keep[0]
+	S.day_streak = keep[1]
+	S.challenge_day = keep[2]
+	S.coins = keep[3]
 	# scoring
 	check(R.stars_for(0, [0.0, 1.0]) == 3.0, "clean drink = 3 stars")
 	check(R.stars_for(1, []) == 2.0, "one mistake = 2 stars")

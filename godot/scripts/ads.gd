@@ -143,13 +143,14 @@ func schedule_reminders() -> void:
 		return
 	var pool: Array = Recipes.DRINKS.slice(0, maxi(1, Save.unlocked))
 	var special: String = Recipes.drink_name(pool[randi() % pool.size()])
+	var keep := Save.day_streak >= 2
 	var titles := PackedStringArray([
-		"Your bar opens tonight 🍸",
+		"Keep your %d-day streak going" % (Save.day_streak + 1) if keep else "Your bar opens tonight 🍸",
 		"Guests are waiting at the bar",
 		"Your shaker misses you",
 	])
 	var bodies := PackedStringArray([
-		"Tonight's special: %s. Can you get 3 stars?" % special,
+		"Your tips jar is waiting, and so is a new daily challenge." if keep else "Tonight's special: %s. Can you get 3 stars?" % special,
 		"Beat your best score of %d in a 90-second shift." % Save.best_score if Save.best_score > 0 else "A quick 90-second shift is waiting for you.",
 		"%d recipes are still locked. Come and learn the next one!" % maxi(0, Recipes.DRINKS.size() - Save.unlocked) if Save.unlocked < Recipes.DRINKS.size() else "Can you make every drink from memory?",
 	])

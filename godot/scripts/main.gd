@@ -536,6 +536,7 @@ func show_menu() -> void:
 	v.add_child(_label("Work the bar. Learn real cocktails.", 20, Color(1, 1, 1, 0.85)))
 	v.add_child(_label("● %d coins   ·   %d of %d drinks unlocked" % [Save.coins, Save.unlocked, Recipes.DRINKS.size()], 20, C_GOLD))
 	v.add_child(_label(_next_unlock_text(), 18, Color(1.0, 0.85, 0.55, 0.85)))
+	v.add_child(_daily_line())
 	var sp := Control.new()
 	sp.custom_minimum_size = Vector2(0, 10)
 	v.add_child(sp)
@@ -580,6 +581,73 @@ func show_menu() -> void:
 			OS.shell_open(PRIVACY_URL), 18, Color(0.25, 0.2, 0.3)))
 	var note := _label("A simulation for adults. Fictional brands. Please drink responsibly.", 16, Color(1, 1, 1, 0.55))
 	v.add_child(note)
+	if Save.gift_waiting():
+		_tips_jar(o)
+
+
+# =============================================================== daily loop
+
+## Menu line: the day streak and today's challenge.
+func _daily_line() -> Control:
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", _panel(Color(0.35, 0.18, 0.05, 0.55), 14))
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 14)
+	box.add_child(h)
+	var day: int = Save.day_streak if not Save.gift_waiting() else Save.next_streak()
+	h.add_child(_label("DAY %d STREAK" % day if day > 1 else "DAILY", 18, C_GOLD))
+	var d: Dictionary = Save.challenge_drink()
+	if Save.challenge_done():
+		h.add_child(_label("Challenge done. New one tomorrow.", 19, C_GREEN))
+	else:
+		h.add_child(_label("Challenge: 3-star %s   ● %d" % [Recipes.drink_name(d), Save.CHALLENGE_COINS], 19, Color.WHITE))
+	return box
+
+
+## Once a day: the tips jar, bigger for each day in a row, up to day 7.
+func _tips_jar(parent: Control) -> void:
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	parent.add_child(dim)
+	var v := _center_box(parent, 620)
+	var day: int = Save.next_streak()
+	var t := _label("TODAY'S TIPS JAR", 40, C_GOLD)
+	t.add_theme_font_override("font", title_font)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var sub := _label("Day %d in a row" % day if day > 1 else "Come back every day for a bigger jar", 22, Color(1, 1, 1, 0.8))
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(sub)
+	# the week ladder, today's jar lit up
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	v.add_child(row)
+	var today_i: int = (day - 1) % Save.GIFTS.size()
+	for i in Save.GIFTS.size():
+		var cell := PanelContainer.new()
+		var col := Color(0.55, 0.38, 0.1, 0.95) if i == today_i else (Color(0.2, 0.35, 0.25, 0.9) if i < today_i else Color(1, 1, 1, 0.08))
+		cell.add_theme_stylebox_override("panel", _panel(col, 12))
+		cell.custom_minimum_size = Vector2(74, 0)
+		var cv := VBoxContainer.new()
+		cell.add_child(cv)
+		var dl := _label("DAY %d" % (i + 1), 14, Color(1, 1, 1, 0.75))
+		dl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cv.add_child(dl)
+		var cl := _label("● %d" % Save.GIFTS[i], 20, C_GOLD if i >= today_i else Color(1, 1, 1, 0.6))
+		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cv.add_child(cl)
+		row.add_child(cell)
+	v.add_child(_button("COLLECT  ● %d" % Save.gift_coins(day), func():
+		var c: int = Save.open_gift()
+		Audio.play("tip")
+		show_menu()
+		if c > 0:
+			show_toast("+%d coins" % c, C_GOLD, 56), 30))
+	var miss := _label("Miss a day and the jar starts again from day 1.", 16, Color(1, 1, 1, 0.55))
+	miss.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(miss)
 
 
 const PRIVACY_URL := "https://vedshubham58-crypto.github.io/bartender/privacy.html"
@@ -703,12 +771,22 @@ func _new_order(g: Dictionary, delay := 0.0) -> void:
 	var d: Dictionary = pool[randi() % pool.size()]
 	if Save.made.is_empty() and shift_stats.served == 0 and guests.find(g) == 0:
 		d = Recipes.DRINKS[0]
+	elif not Save.challenge_done() and randf() < 0.3 and not _ordered(Save.challenge_drink().id):
+		# today's challenge drink comes up often, so it can be done in one shift
+		d = Save.challenge_drink()
 	elif Save.shifts >= 1 and randf() < 0.3:
 		d = Recipes.with_request(d, randi())
 	g.order = d
 	g.patience = PATIENCE * (1.3 if boost.has("patience") else 1.0) + delay
 	if g.waiter:
 		g.table = randi_range(2, 9)
+
+
+func _ordered(id: String) -> bool:
+	for o in guests:
+		if not o.order.is_empty() and o.order.id == id:
+			return true
+	return false
 
 
 func _process(delta: float) -> void:
@@ -1385,6 +1463,10 @@ func _serve() -> void:
 	if boost.has("tips"):
 		tip = int(round(tip * 1.5))
 	Save.coins += tip
+	var won: int = Save.try_challenge(d.id, stars)
+	if won > 0:
+		badges.append("DAILY CHALLENGE +%d" % won)
+		shift_stats.coins += won
 	Save.record(d.id, stars)
 	Save.save()
 	shift_stats.served += 1
