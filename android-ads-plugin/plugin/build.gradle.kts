@@ -21,4 +21,5 @@ dependencies {
     // Godot adds this to the game too (see godot/addons/neon_ads/plugin.gd); keep the versions in step.
     compileOnly("com.google.android.gms:play-services-ads:23.6.0")
     compileOnly("com.google.android.ump:user-messaging-platform:3.1.0")
+    compileOnly("com.google.android.play:review:2.0.2")
 }

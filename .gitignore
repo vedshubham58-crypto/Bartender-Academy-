@@ -16,3 +16,4 @@ keystore.properties
 godot/android/
 godot/addons/neon_ads/bin/
 *.import.tmp
+__pycache__/

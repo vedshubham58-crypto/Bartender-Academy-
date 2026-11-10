@@ -1,17 +1,22 @@
 name: Make Shorts
 
-# Every morning the game plays two drinks by itself, twice, and each run is recorded as a
-# vertical 1080x1920 clip with captions. The clips land in the "shorts" release:
+# Three times a week (Monday, Wednesday, Friday) the game plays by itself and is recorded as a
+# vertical 1080x1920 clip with captions, each time in the next format (guest orders, cinematic,
+# learn the recipe, classic POV). The clips land in the "shorts" release:
 # https://github.com/<owner>/<repo>/releases/tag/shorts
 # The daily posting task picks them up from there. Run it by hand from the Actions tab too.
 on:
   schedule:
-    - cron: "0 0 * * *" # 05:30 in India
+    # GitHub often starts scheduled runs late, so this runs early: about 05:30 in India.
+    - cron: "17 0 * * 1,3,5"
   workflow_dispatch:
     inputs:
       count:
         description: How many clips
-        default: "2"
+        default: "1"
+      format:
+        description: guest, cinematic, learn, pov, or all (empty = next in turn)
+        default: ""
       cta:
         description: Line on the end card
         default: Coming soon on Google Play
@@ -59,11 +64,12 @@ jobs:
 
       - name: Record clips
         env:
-          COUNT: ${{ github.event.inputs.count || '2' }}
+          COUNT: ${{ github.event.inputs.count || '1' }}
+          FORMAT: ${{ github.event.inputs.format || '' }}
           CTA: ${{ github.event.inputs.cta || env.DEFAULT_CTA }}
         run: |
           xvfb-run -a -s "-screen 0 1280x800x24" \
-            python3 tools/make_shorts.py --godot godot --out shorts --count "$COUNT" --cta "$CTA"
+            python3 tools/make_shorts.py --godot godot --out shorts --count "$COUNT" --format "$FORMAT" --cta "$CTA"
           ls -la shorts
           ls shorts/*.mp4 > /dev/null
 
@@ -80,6 +86,6 @@ jobs:
           gh release view shorts > /dev/null 2>&1 || gh release create shorts --prerelease \
             --title "Shorts and Reels clips" --notes "Daily gameplay clips for Shorts and Reels, made by the Make Shorts workflow."
           gh release upload shorts shorts/*.mp4 shorts/*.json --clobber
-          # Keep the newest 60 files (about two weeks of clips and captions).
+          # Keep the newest 60 files (a few months of clips and captions).
           gh release view shorts --json assets --jq '.assets | sort_by(.createdAt) | reverse | .[60:] | .[].name' |
             while read -r old; do gh release delete-asset shorts "$old" --yes; done

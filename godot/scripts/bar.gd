@@ -355,10 +355,63 @@ func set_fill(g: Node3D, fill: float, color: Color) -> void:
 	liq.mesh = lathe(profile([[0, b[0]], [b[2] * .96, b[0]], [rt * .96, top], [0, top]]), 28)
 	# clear spirits get a warm tint and a soft glow so you can see the level in the glass
 	var lm := liq.material_override as StandardMaterial3D
-	lm.albedo_color = Color(color.lerp(Color(1.0, 0.85, 0.55), 0.25), 0.85)
+	# (strongly coloured drinks keep their own colour: a Negroni stays deep red)
+	var clear: float = 1.0 - clampf((maxf(color.r, maxf(color.g, color.b)) - minf(color.r, minf(color.g, color.b))) * 1.8, 0.0, 1.0)
+	lm.albedo_color = Color(color.lerp(Color(1.0, 0.85, 0.55), 0.25 * clear), 0.85 + 0.1 * (1.0 - clear))
 	lm.emission_enabled = true
-	lm.emission = color.lerp(Color(1.0, 0.8, 0.5), 0.4)
+	lm.emission = color.lerp(Color(1.0, 0.8, 0.5), 0.4 * clear)
 	lm.emission_energy_multiplier = 0.35
+
+
+## A floated (or sunk) layer in a glass from [method make_glass], between fill levels
+## [param a] and [param b] (0..1 of the bowl). A layer is drawn a hair wider than the
+## drink so a sunk one shows through it. Pass b <= a to remove it.
+func set_layer(g: Node3D, a: float, b: float, color: Color) -> void:
+	var ly: MeshInstance3D = g.get_node_or_null("Layer")
+	if b - a < 0.005:
+		if ly:
+			ly.queue_free()
+		return
+	if ly == null:
+		ly = MeshInstance3D.new()
+		ly.name = "Layer"
+		ly.material_override = liquid_mat(color)
+		g.add_child(ly)
+	var bw: Array = GLASS_BOWL[g.get_meta("kind")]
+	a = clampf(a, 0.0, 1.0)
+	b = clampf(b, 0.0, 1.0)
+	var y0: float = lerpf(bw[0], bw[1], a)
+	var y1: float = lerpf(bw[0], bw[1], b)
+	var r0: float = lerpf(bw[2], bw[3], a) * .975
+	var r1: float = lerpf(bw[2], bw[3], b) * .975
+	ly.mesh = lathe(profile([[0, y0], [r0, y0], [r1, y1], [0, y1]]), 28)
+	var lm := ly.material_override as StandardMaterial3D
+	lm.albedo_color = Color(color, 0.95)
+	lm.emission_enabled = true
+	lm.emission = color
+	lm.emission_energy_multiplier = 0.25
+
+
+## Blender on the back bar: a base and a jar ("Jar", fill it with [method set_fill]).
+func make_blender() -> Node3D:
+	var b := Node3D.new()
+	b.name = "Blender"
+	var dark := mat(Color(0.08, 0.08, 0.09), 0.3, 0.35)
+	box(Vector3(.12, .09, .12), dark, Vector3(0, .045, 0), b)
+	box(Vector3(.03, .012, .01), emissive(Color(0.3, 1.0, 0.55), 2.0), Vector3(0, .05, .061), b)
+	var jar := Node3D.new()
+	jar.name = "Jar"
+	jar.set_meta("kind", "tin")
+	jar.position = Vector3(0, .09, 0)
+	b.add_child(jar)
+	add_mesh(lathe(profile([[0, 0], [.04, 0], [.041, .004], [.048, .168], [.049, .172]]), 28), glass, Vector3.ZERO, jar)
+	cyl(.051, .051, .016, dark, Vector3(0, .178, 0), jar, 20)
+	var liq := MeshInstance3D.new()
+	liq.name = "Liquid"
+	liq.material_override = liquid_mat(Color.WHITE)
+	liq.visible = false
+	jar.add_child(liq)
+	return b
 
 
 ## Shaker tin (big tin of a Boston shaker) with a liquid level like a glass.

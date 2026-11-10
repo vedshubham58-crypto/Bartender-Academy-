@@ -15,12 +15,21 @@ func _ready() -> void:
 	Save.shifts = 0
 	Save.made = {}
 	Save.best = {}
-	Save.unlocked = 8
+	Save.unlocked = Recipes.DRINKS.size() if "--drinks=" in " ".join(args) else 8
 	Save.mocktail = "--mocktail" in args
+	Save.gift_day = Save.day_key(1) # played yesterday: today's tips jar is waiting
+	Save.day_streak = 2
+	Save.challenge_day = ""
 	main = load("res://scenes/main.tscn").instantiate()
+	main.guests_leave = false # the test serves the same four seats
 	add_child(main)
 	await _frames(20)
 	await shot("menu")
+	check(Save.open_gift() == Save.gift_coins(3) and Save.day_streak == 3, "tips jar opens once, day 3")
+	check(Save.open_gift() == 0, "tips jar only once a day")
+	main.show_menu()
+	await _frames(10)
+	await shot("menu_daily")
 	if "--picker" in args:
 		main.show_bartender_pick()
 		await _secs(1.5)
@@ -38,6 +47,8 @@ func _ready() -> void:
 			first = int(a.substr(7))
 		if a.begins_with("--count="):
 			count = int(a.substr(8))
+		if a.begins_with("--drinks="):
+			order = Array(a.substr(9).split(","))
 	var all_shots := "--shots" in args
 	for k in range(first, mini(order.size(), first + count)):
 		var gi := k % 4
@@ -79,13 +90,14 @@ func make(gi: int, shots: bool) -> void:
 		guard += 1
 		var s: Dictionary = main.cur.step
 		var i: int = main.cur.i
+		await _between_steps()
 		match s.t:
 			"glass", "rim", "ice", "garnish":
 				if shots and s.t == "glass":
 					await _secs(0.5)
 					await shot(id + "_glass")
 				await main._choose(s.t, s.v)
-			"pour", "top", "dash":
+			"pour", "top", "dash", "layer":
 				await _secs(0.5)
 				var src: String = main.expect_src
 				var wp: Vector3 = main.bar.pickables[src]
@@ -111,9 +123,28 @@ func make(gi: int, shots: bool) -> void:
 					main.stream.visible = true
 					while main.pour_ml < main.pour_target - 0.5:
 						await get_tree().process_frame
+					await _frames(4) # let the hands settle before any screenshot
+					# slow test frames run the real-time pour past the line, so stop where a good player would
+					main.pour_ml = main.pour_target + randf_range(-1.5, 1.5)
+					main._pour_t0 = Time.get_ticks_msec() - int(main.pour_ml / (main.TOP_RATE if s.t == "top" else main.POUR_RATE) * 1000.0)
 					if shots:
 						await shot("%s_%d_pour" % [id, i])
-					await main._pour_release()
+					if s.t == "layer":
+						main._pour_release()
+						await _frames(2)
+						# pulse the pour so the flow stays gentle
+						var g2 := 0
+						var shot_done := false
+						while not main._float.is_empty() and g2 < 900:
+							g2 += 1
+							main._float.holding = main._float.flow < 0.5
+							if shots and not shot_done and main._float.left < main._float.ml * 0.5:
+								shot_done = true
+								await shot("%s_%d_layer" % [id, i])
+							await get_tree().process_frame
+						await _secs(0.5)
+					else:
+						await main._pour_release()
 					await _frames(2)
 			"muddle":
 				for n in 6:
@@ -128,6 +159,20 @@ func make(gi: int, shots: bool) -> void:
 					await _frames(2)
 					if shots and n == 8:
 						await shot(id + "_shake")
+				await _frames(2)
+				if main.expecting == "flip":
+					await _secs(0.3)
+					main._do_flip()
+					await _secs(0.35)
+					if shots:
+						await shot(id + "_flip")
+					await _secs(0.35)
+					main._catch()
+					var g4 := 0
+					while main.expecting == "flip" and g4 < 200:
+						g4 += 1
+						await get_tree().process_frame
+					await _frames(2)
 			"stir":
 				var ev := InputEventScreenDrag.new()
 				ev.relative = Vector2(80, 60)
@@ -143,6 +188,26 @@ func make(gi: int, shots: bool) -> void:
 			"strain":
 				main._strain()
 				await _secs(1.8)
+			"blend":
+				await _secs(0.4)
+				main._blend_hold(true)
+				while main._blend.get("p", 999.0) < 82.0:
+					await get_tree().process_frame
+				if shots:
+					await shot(id + "_blend")
+				main._blend_hold(false)
+				await _secs(1.6)
+			"flame":
+				await _secs(0.3)
+				var g3 := 0
+				while main._flame_level() < 0.9 and g3 < 300:
+					g3 += 1
+					await get_tree().process_frame
+				if shots:
+					await shot(id + "_flame")
+				main._squeeze()
+				await _frames(4)
+				await _secs(0.9)
 		await _frames(2)
 		if main.cur.is_empty() or main.cur.i == i:
 			if not main.cur.is_empty():
@@ -152,11 +217,22 @@ func make(gi: int, shots: bool) -> void:
 	await _secs(0.5)
 	if shots:
 		await shot(id + "_ready")
+	await _before_serve()
 	main._serve()
 	await _secs(0.9)
 	if shots:
 		await shot(id + "_served")
 	print("served %s, coins %d" % [id, Save.coins])
+
+
+## A breath between steps (the promo recorder slows down here so each step can be seen).
+func _between_steps() -> void:
+	pass
+
+
+## The drink is finished and still on the mat (the promo recorder can look at it here).
+func _before_serve() -> void:
+	pass
 
 
 func shot(name: String) -> void:
@@ -171,3 +247,9 @@ func _frames(n: int) -> void:
 
 func _secs(t: float) -> void:
 	await get_tree().create_timer(t).timeout
+
+
+func check(ok: bool, what: String) -> void:
+	if not ok:
+		fails += 1
+		print("FAIL: ", what)
