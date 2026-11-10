@@ -10,6 +10,9 @@ func _initialize() -> void:
 	save.birth_year = 1995
 	save.venue = v
 	save.gift_day = save.day_key() # no tips jar over the picture
+	var ui: bool = args.size() > 2 and args[2] == "ui"
+	if ui:
+		save.shifts = 9 # beach and hotel open, speakeasy still locked
 	var main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	for i in 20:
@@ -26,4 +29,16 @@ func _initialize() -> void:
 			await process_frame
 		await RenderingServer.frame_post_draw
 		root.get_viewport().get_texture().get_image().save_png("%s_%s_%s.png" % [out, v, view])
+	if ui:
+		main.set_process(true)
+		main.show_menu()
+		for i in 30:
+			await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_viewport().get_texture().get_image().save_png("%s_%s_menuui.png" % [out, v])
+		main.show_bars()
+		for i in 10:
+			await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_viewport().get_texture().get_image().save_png("%s_%s_picker.png" % [out, v])
 	quit()
