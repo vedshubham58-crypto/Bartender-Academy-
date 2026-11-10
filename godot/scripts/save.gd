@@ -23,6 +23,8 @@ var review_asked: Array = [] ## shift counts at which Google's rating card was o
 var gift_day := "" ## the last day ("YYYY-MM-DD", phone's local date) the daily tips jar was opened
 var day_streak := 0 ## days in a row the tips jar was opened
 var challenge_day := "" ## the last day the daily challenge was done
+var venue := "rooftop" ## which bar you work in (Bar.VENUES)
+var bars_seen: Array = ["rooftop"] ## bars the player has looked at in the picker (for the NEW tag)
 
 ## Tips jar coins for day 1..7 of a streak; day 8 starts the week again.
 const GIFTS := [20, 30, 40, 50, 70, 90, 150]
@@ -128,6 +130,8 @@ func load_game() -> void:
 	gift_day = str(data.get("gift_day", ""))
 	day_streak = int(data.get("day_streak", 0))
 	challenge_day = str(data.get("challenge_day", ""))
+	venue = str(data.get("venue", "rooftop"))
+	bars_seen = data.get("bars_seen", ["rooftop"])
 	if mocktail_locked():
 		mocktail = true
 
@@ -140,5 +144,5 @@ func save() -> void:
 		"coins": coins, "unlocked": unlocked, "made": made, "best": best, "shifts": shifts,
 		"birth_year": birth_year, "mocktail": mocktail, "sound": sound, "music": music, "best_score": best_score, "asked_notify": asked_notify, "bartender": bartender,
 		"owned": owned, "tool_skin": tool_skin, "light_theme": light_theme, "boosts": boosts,
-		"review_asked": review_asked, "gift_day": gift_day, "day_streak": day_streak, "challenge_day": challenge_day,
+		"review_asked": review_asked, "gift_day": gift_day, "day_streak": day_streak, "challenge_day": challenge_day, "venue": venue, "bars_seen": bars_seen,
 	}))

@@ -172,15 +172,20 @@ func _spawn_people() -> void:
 	bar.cyl(.2, .2, .012, bar.mat(Color(0.15, 0.15, 0.15), 0.8, 0.3), h + Vector3(0, .04, 0))
 	waiter.set_meta("tray", h + Vector3(0, .047, 0))
 	guests.append({"node": waiter, "x": 1.86, "order": {}, "patience": 0.0, "phase": 0.0, "bubble": null, "served": null, "drink_t": 0.0, "waiter": true})
-	# guests relaxing on the terrace sofas, a drink on the table in front of them
-	var spots := [["louise", -2.6, 0.15], ["leonard", 2.6, -0.1], ["megan", 2.95, -0.35]]
-	for sp in spots:
+	# people round the room: relaxing, dancing, playing, each venue its own
+	for sp in bar.crowd():
 		var n := People.spawn(sp[0], bar)
 		n.rotation.y = sp[2]
 		People.set_height(n, 1.7)
-		People.sit_legs(n)
-		People.arms_down(n)
-		People.place_hips(n, Vector3(sp[1], 0.55, -7.62))
+		People.pose(n, sp[3])
+		var p: Vector3 = sp[1]
+		if sp[3] == "sit":
+			People.place_hips(n, p)
+		else:
+			People.place_standing(n, p.x, p.z)
+			n.position.y += p.y
+	if bar.venue != "rooftop":
+		return
 	for x in [-2.6, 2.75]:
 		var gl := bar.make_glass("coupe" if x < 0 else "rocks")
 		gl.position = Vector3(x + 0.1, 0.77, -6.95)
@@ -550,6 +555,9 @@ func show_menu() -> void:
 	var shop_b := _button("SHOP  ● %d" % Save.coins, show_shop, 20, Color(0.55, 0.4, 0.1))
 	shop_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mrow.add_child(shop_b)
+	var bars_b := _button("BARS" + ("  NEW" if _new_bar_waiting() else ""), show_bars, 20, Color(0.2, 0.3, 0.42))
+	bars_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mrow.add_child(bars_b)
 	# bartender and mocktail share a row so the drink-responsibly line stays on screen
 	var brow := HBoxContainer.new()
 	brow.add_theme_constant_override("separation", 12)
@@ -656,6 +664,73 @@ func _tips_jar(parent: Control) -> void:
 	var miss := _label("Miss a day and the jar starts again from day 1.", 16, Color(1, 1, 1, 0.55))
 	miss.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(miss)
+
+
+# =============================================================== bars
+
+## True when a bar is open to the player that they haven't looked at yet.
+func _new_bar_waiting() -> bool:
+	for id in Bar.VENUES:
+		if Save.shifts >= int(Bar.VENUES[id].unlock) and not Save.bars_seen.has(id):
+			return true
+	return false
+
+
+## The bar picker: every bar, what it is, and how many shifts until the locked ones open.
+func show_bars() -> void:
+	for id in Bar.VENUES:
+		if Save.shifts >= int(Bar.VENUES[id].unlock) and not Save.bars_seen.has(id):
+			Save.bars_seen.append(id)
+	Save.save()
+	var o := _overlay()
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	o.add_child(dim)
+	var v := _center_box(o, 820)
+	var t := _label("CHOOSE YOUR BAR", 40, C_GOLD)
+	t.add_theme_font_override("font", title_font)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	for id in Bar.VENUES:
+		var info: Dictionary = Bar.VENUES[id]
+		var open: bool = Save.shifts >= int(info.unlock)
+		var here: bool = Save.venue == id
+		var card := PanelContainer.new()
+		card.add_theme_stylebox_override("panel", _panel(Color(0.45, 0.28, 0.08, 0.9) if here else Color(0.12, 0.08, 0.07, 0.92), 14))
+		v.add_child(card)
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 16)
+		card.add_child(h)
+		var tv := VBoxContainer.new()
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(tv)
+		tv.add_child(_label(info.name, 26, Color.WHITE if open else Color(1, 1, 1, 0.5)))
+		tv.add_child(_label(info.about, 17, Color(1, 1, 1, 0.7 if open else 0.4)))
+		if here:
+			h.add_child(_label("WORKING HERE", 20, C_GREEN))
+		elif open:
+			h.add_child(_button("MOVE HERE", _move_to_bar.bind(id), 22, Color(0.85, 0.45, 0.15)))
+		else:
+			var left: int = int(info.unlock) - Save.shifts
+			h.add_child(_label("%d more shift%s" % [left, "" if left == 1 else "s"], 19, Color(1.0, 0.85, 0.55, 0.8)))
+	v.add_child(_button("Close", show_menu, 22, Color(0.3, 0.25, 0.35)))
+
+
+func _move_to_bar(id: String) -> void:
+	Audio.play("good", -6.0)
+	Save.venue = id
+	Save.save()
+	# the whole room is built in code when the scene starts, so start it again
+	get_tree().reload_current_scene()
+
+
+## The bar a finished shift has just opened, or "".
+func _bar_unlocked_now() -> String:
+	for id in Bar.VENUES:
+		if int(Bar.VENUES[id].unlock) > 0 and int(Bar.VENUES[id].unlock) == Save.shifts:
+			return Bar.VENUES[id].name
+	return ""
 
 
 const PRIVACY_URL := "https://vedshubham58-crypto.github.io/bartender/privacy.html"
@@ -1869,6 +1944,11 @@ func _score_card(unlocked: String, new_best: bool) -> void:
 		var u := _label("New recipes unlocked: %s" % unlocked, 26, C_GREEN)
 		u.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		v.add_child(u)
+	var new_bar := _bar_unlocked_now()
+	if new_bar != "":
+		var nb := _label("New bar open: %s! Pick it from BARS on the menu." % new_bar, 24, Color(0.6, 0.85, 1.0))
+		nb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		v.add_child(nb)
 	var nxt := _next_unlock_text()
 	if nxt != "":
 		var n := _label(nxt, 22, Color(1.0, 0.85, 0.55))
