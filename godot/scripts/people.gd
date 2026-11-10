@@ -294,3 +294,47 @@ static func look_at_point(n: Node3D, point: Vector3, amount := 1.0) -> void:
 	var p := s.get_bone_parent(hb)
 	var pb := gpose(s, p).basis if p >= 0 else Basis()
 	s.set_bone_pose_rotation(hb, (pb.inverse() * new_g.orthonormalized()).get_rotation_quaternion())
+
+
+## Background poses: "sit", "arms_up", "ready" (volleyball), "dance", "dance2", "sing".
+static func pose(n: Node3D, kind: String) -> void:
+	var s := skel(n)
+	match kind:
+		"sit":
+			sit_legs(n)
+			arms_down(n)
+		"arms_up":
+			aim(s, "LeftArm", "LeftForeArm", local_dir(n, Vector3(.3, 1, .25)))
+			aim(s, "RightArm", "RightForeArm", local_dir(n, Vector3(-.3, 1, .25)))
+			aim(s, "LeftForeArm", "LeftHand", local_dir(n, Vector3(.1, 1, .05)))
+			aim(s, "RightForeArm", "RightHand", local_dir(n, Vector3(-.1, 1, .05)))
+		"ready":
+			lean(n, .35)
+			aim(s, "LeftUpLeg", "LeftLeg", local_dir(n, Vector3(.25, -1, .35)))
+			aim(s, "RightUpLeg", "RightLeg", local_dir(n, Vector3(-.25, -1, .35)))
+			aim(s, "LeftLeg", "LeftFoot", local_dir(n, Vector3(.1, -1, -.2)))
+			aim(s, "RightLeg", "RightFoot", local_dir(n, Vector3(-.1, -1, -.2)))
+			aim(s, "LeftArm", "LeftForeArm", local_dir(n, Vector3(.15, -.6, 1)))
+			aim(s, "RightArm", "RightForeArm", local_dir(n, Vector3(-.15, -.6, 1)))
+			aim(s, "LeftForeArm", "LeftHand", local_dir(n, Vector3(-.2, -.4, 1)))
+			aim(s, "RightForeArm", "RightHand", local_dir(n, Vector3(.2, -.4, 1)))
+		"dance":
+			aim(s, "LeftArm", "LeftForeArm", local_dir(n, Vector3(.6, .8, .2)))
+			aim(s, "LeftForeArm", "LeftHand", local_dir(n, Vector3(.1, 1, .1)))
+			aim(s, "RightArm", "RightForeArm", local_dir(n, Vector3(-.5, -.5, .5)))
+			aim(s, "RightForeArm", "RightHand", local_dir(n, Vector3(.2, .6, .8)))
+			aim(s, "LeftUpLeg", "LeftLeg", local_dir(n, Vector3(.1, -1, .3)))
+			aim(s, "LeftLeg", "LeftFoot", local_dir(n, Vector3(0, -1, -.3)))
+		"dance2":
+			aim(s, "LeftArm", "LeftForeArm", local_dir(n, Vector3(.6, -.3, .6)))
+			aim(s, "RightArm", "RightForeArm", local_dir(n, Vector3(-.6, -.3, .6)))
+			aim(s, "LeftForeArm", "LeftHand", local_dir(n, Vector3(-.3, .8, .4)))
+			aim(s, "RightForeArm", "RightHand", local_dir(n, Vector3(.3, .8, .4)))
+			aim(s, "RightUpLeg", "RightLeg", local_dir(n, Vector3(-.15, -1, .25)))
+			aim(s, "RightLeg", "RightFoot", local_dir(n, Vector3(0, -1, -.3)))
+		"sing":
+			arms_down(n)
+			aim(s, "RightArm", "RightForeArm", local_dir(n, Vector3(-.3, -.6, .7)))
+			aim(s, "RightForeArm", "RightHand", local_dir(n, Vector3(.4, .9, .3)))
+		_:
+			arms_down(n)

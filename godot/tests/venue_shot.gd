@@ -9,6 +9,8 @@ func _initialize() -> void:
 	var save = root.get_node("/root/Save")
 	save.birth_year = 1995
 	save.venue = v
+	save.light_theme = "warm" # other tests leave their shop picks in the save
+	save.tool_skin = "steel"
 	save.gift_day = save.day_key() # no tips jar over the picture
 	var ui: bool = args.size() > 2 and args[2] == "ui"
 	if ui:
@@ -18,8 +20,11 @@ func _initialize() -> void:
 	for i in 20:
 		await process_frame
 	main._close_overlay()
-	for view in ["menu", "bar", "wide"]:
-		if view == "wide":
+	for view in ["menu", "bar", "wide", "room"]:
+		if view == "room":
+			main.cam.global_transform = Transform3D(Basis.looking_at(Vector3(0.0, 0.9, -8.0) - Vector3(0.0, 2.3, 1.2)), Vector3(0.0, 2.3, 1.2))
+			main.cam.fov = 72
+		elif view == "wide":
 			main.cam.global_transform = Transform3D(Basis.looking_at(Vector3(0.0, 1.25, -0.4) - Vector3(0.6, 1.6, -4.2)), Vector3(0.6, 1.6, -4.2))
 			main.cam.fov = 55
 			main.set_process(false)

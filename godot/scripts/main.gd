@@ -172,15 +172,20 @@ func _spawn_people() -> void:
 	bar.cyl(.2, .2, .012, bar.mat(Color(0.15, 0.15, 0.15), 0.8, 0.3), h + Vector3(0, .04, 0))
 	waiter.set_meta("tray", h + Vector3(0, .047, 0))
 	guests.append({"node": waiter, "x": 1.86, "order": {}, "patience": 0.0, "phase": 0.0, "bubble": null, "served": null, "drink_t": 0.0, "waiter": true})
-	# guests relaxing on the terrace sofas, a drink on the table in front of them
-	var spots := [["louise", -2.6, 0.15], ["leonard", 2.6, -0.1], ["megan", 2.95, -0.35]]
-	for sp in spots:
+	# people round the room: relaxing, dancing, playing, each venue its own
+	for sp in bar.crowd():
 		var n := People.spawn(sp[0], bar)
 		n.rotation.y = sp[2]
 		People.set_height(n, 1.7)
-		People.sit_legs(n)
-		People.arms_down(n)
-		People.place_hips(n, Vector3(sp[1], 0.55, -7.62))
+		People.pose(n, sp[3])
+		var p: Vector3 = sp[1]
+		if sp[3] == "sit":
+			People.place_hips(n, p)
+		else:
+			People.place_standing(n, p.x, p.z)
+			n.position.y += p.y
+	if bar.venue != "rooftop":
+		return
 	for x in [-2.6, 2.75]:
 		var gl := bar.make_glass("coupe" if x < 0 else "rocks")
 		gl.position = Vector3(x + 0.1, 0.77, -6.95)

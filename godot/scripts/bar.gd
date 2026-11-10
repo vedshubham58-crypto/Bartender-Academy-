@@ -1250,7 +1250,7 @@ func _build_beach() -> void:
 	sea.metallic_specular = 1.0
 	box(Vector3(3000, .02, 1500), sea, Vector3(0, -.08, -770))
 	box(Vector3(60, .01, .35), emissive(Color(1.0, 0.95, 0.85), 0.8), Vector3(0, -.035, -18.2))
-	var sun := sphere(18.0, emissive(Color(1.0, 0.72, 0.38), 4.0), Vector3(-60, 14, -520))
+	var sun := sphere(30.0, emissive(Color(1.0, 0.62, 0.3), 4.5), Vector3(-190, 9, -500))
 	sun.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# palms all round
 	var trunk := mat(Color(0.42, 0.32, 0.2), 0.0, 0.9)
@@ -1285,11 +1285,74 @@ func _build_beach() -> void:
 		var x := -6.0 + i * 0.41
 		sphere(.028, bulb, Vector3(x, 3.4 - 0.3 * sin(PI * fposmod(x + 6.0, 4.0) / 4.0), -4.6))
 	_venue_sign("Beach Shack", Vector3(0, 2.95, -2.36), Color(2.2, 1.9, 1.3), Color(0.95, 0.45, 0.15, 0.8))
+	# umbrellas over the loungers, straw and striped in turn
+	for i in 4:
+		var x := -4.2 + i * 2.8
+		cyl(.025, .025, 2.3, bamboo, Vector3(x + .45, 1.15, -8.2), self, 6)
+		var top: Material = thatch if i % 2 == 0 else mat(Color(0.95, 0.4, 0.3) if i == 1 else Color(0.2, 0.55, 0.7), 0.0, 0.8)
+		cyl(.03, 1.15, .45, top, Vector3(x + .45, 2.25, -8.2), self, 16)
+	# two Bali day beds with white curtains and cushions
+	var cloth := mat(Color(0.97, 0.95, 0.9), 0.0, 0.9)
+	var cush := [mat(Color(0.95, 0.6, 0.3)), mat(Color(0.25, 0.6, 0.65)), mat(Color(0.9, 0.85, 0.7))]
+	for x in [-7.0, 7.0]:
+		var c := Vector3(x, 0, -6.6)
+		box(Vector3(2.0, .35, 2.0), wood, c + Vector3(0, .18, 0))
+		box(Vector3(1.9, .16, 1.9), cloth, c + Vector3(0, .43, 0))
+		for k in 3:
+			box(Vector3(.5, .3, .14), cush[k], c + Vector3(-.6 + k * .6, .66, -.82))
+		for dx in [-.95, .95]:
+			for dz in [-.95, .95]:
+				cyl(.04, .04, 2.3, bamboo, c + Vector3(dx, 1.15, dz), self, 8)
+				# curtains tied back at each post
+				var cu := cyl(.04, .14, 2.0, cloth, c + Vector3(dx * .9, 1.2, dz * .9), self, 8)
+				cu.scale = Vector3(1, 1, .6)
+		box(Vector3(2.1, .12, 2.1), thatch, c + Vector3(0, 2.35, 0))
+	# beach volleyball net out on the sand, ball in the air
+	for x in [-2.8, 2.8]:
+		cyl(.04, .04, 2.5, mat(Color(0.9, 0.9, 0.9), 0.3, 0.4), Vector3(x, 1.25, -12.0), self, 8)
+	var net := mat(Color(0.1, 0.1, 0.1, 0.55), 0.0, 0.8)
+	net.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	box(Vector3(5.6, .8, .01), net, Vector3(0, 2.0, -12.0))
+	box(Vector3(5.6, .06, .02), mat(Color(0.95, 0.95, 0.95)), Vector3(0, 2.42, -12.0))
+	var ball := sphere(.11, mat(Color(1.0, 0.9, 0.25), 0.0, 0.5), Vector3(-.9, 3.3, -11.1))
+	ball.set_meta("dyn", true)
+	# a sandcastle and surfboards against a palm
+	var sand := mat(Color(0.85, 0.72, 0.52), 0.0, 0.95)
+	var sc := Vector3(3.4, 0, -15.2)
+	cyl(.55, .6, .35, sand, sc + Vector3(0, .17, 0), self, 12)
+	for a in 4:
+		var tp := sc + Vector3(cos(a * TAU / 4) * .45, 0, sin(a * TAU / 4) * .45)
+		cyl(.14, .16, .5, sand, tp + Vector3(0, .25, 0), self, 8)
+		cyl(.02, .14, .18, sand, tp + Vector3(0, .59, 0), self, 8)
+	cyl(.22, .28, .4, sand, sc + Vector3(0, .55, 0), self, 10)
+	for i in 3:
+		var b := box(Vector3(.5, 2.0, .06), mat([Color(0.95, 0.5, 0.2), Color(0.2, 0.6, 0.8), Color(0.95, 0.9, 0.8)][i], 0.0, 0.3), Vector3(4.0 + i * .35, .95, -5.0))
+		b.scale = Vector3(1, 1, 1)
+		b.rotation = Vector3(-.15, 0, .12 - i * .1)
+	# sail boats far out on the water
+	for bt in [Vector3(-35, 0, -160), Vector3(48, 0, -230)]:
+		box(Vector3(5, .8, 1.4), mat(Color(0.95, 0.95, 0.95)), bt + Vector3(0, .3, 0))
+		var pr := PrismMesh.new()
+		pr.size = Vector3(4, 7, .1)
+		pr.left_to_right = 0.1
+		add_mesh(pr, mat(Color(1.0, 0.92, 0.85)), bt + Vector3(.5, 4.3, 0))
+	# the sun's golden path across the sea
+	var glint := emissive(Color(1.0, 0.6, 0.3), 1.6)
+	for i in 70:
+		var t := pow(i / 70.0, 1.6)
+		var p := Vector3(-190, 0, -500).lerp(Vector3(-1.5, 0, -19), 1.0 - t)
+		box(Vector3(_rng.randf_range(.6, 2.2) * (1.0 + t * 14.0), .01, .12 + t * 3.0), glint, Vector3(p.x + _rng.randf_range(-.6, .6) * (1 + t * 8), -.05, p.z))
+	# soft pink clouds by the sun
+	var cloud := emissive(Color(1.0, 0.55, 0.45), 0.9)
+	for cp in [Vector3(-240, 40, -480), Vector3(-150, 55, -500), Vector3(-90, 34, -470), Vector3(-280, 26, -440)]:
+		var cl := sphere(14.0, cloud, cp)
+		cl.scale = Vector3(4, .5, 1)
 
 
 ## Grand hotel lounge: marble, dark wood panels with brass, chandeliers, a piano and tall
 ## windows over a night city.
 func _build_hotel() -> void:
+	var black := mat(Color(0.02, 0.02, 0.025), 0.2, 0.08)
 	var panel := mat(Color.WHITE, 0.0, 0.4)
 	panel.albedo_texture = wood.albedo_texture
 	panel.uv1_scale = Vector3(1, 6, 1)
@@ -1319,7 +1382,7 @@ func _build_hotel() -> void:
 		box(Vector3(2.24, .08, .06), brass, Vector3(x, .48, -10.4))
 	# chandeliers: a brass ring hung with glowing crystals
 	var crystal := emissive(Color(1.0, 0.88, 0.65), 5.0)
-	for c in [Vector3(-3.2, 3.3, -5.5), Vector3(3.2, 3.3, -5.5), Vector3(0, 3.4, -8.5)]:
+	for c in [Vector3(-3.6, 3.3, -5.0), Vector3(3.6, 3.3, -5.0)]:
 		cyl(.004, .004, .8, brass, c + Vector3(0, .5, 0), self, 4)
 		var ring := TorusMesh.new()
 		ring.inner_radius = .32
@@ -1330,7 +1393,6 @@ func _build_hotel() -> void:
 			sphere(.03, crystal, c + Vector3(cos(a) * .34, -.08 - (i % 2) * .06, sin(a) * .34))
 		sphere(.08, crystal, c + Vector3(0, -.2, 0))
 	# a grand piano by the windows
-	var black := mat(Color(0.02, 0.02, 0.025), 0.2, 0.08)
 	var body := cyl(.9, .9, .3, black, Vector3(5.2, .85, -8.2), self, 28)
 	body.scale = Vector3(1, 1, .7)
 	var lid := box(Vector3(1.6, .02, 1.2), black, Vector3(5.1, 1.35, -8.0))
@@ -1341,7 +1403,7 @@ func _build_hotel() -> void:
 	box(Vector3(.8, .45, .35), black, Vector3(4.9, .25, -6.9))
 	# velvet armchairs round low tables, palms in brass pots
 	var velvet := mat(Color(0.1, 0.2, 0.38), 0.0, 0.7)
-	for t in [Vector3(-4.5, 0, -6.8), Vector3(-1.2, 0, -7.2), Vector3(2.0, 0, -6.6)]:
+	for t in [Vector3(-4.6, 0, -4.6), Vector3(4.0, 0, -4.4)]:
 		cyl(.38, .38, .04, cream, t + Vector3(0, .55, 0))
 		cyl(.05, .05, .55, brass, t + Vector3(0, .27, 0), self, 8)
 		sphere(.04, emissive(Color(1.0, 0.7, 0.35), 4.0), t + Vector3(0, .62, 0))
@@ -1354,6 +1416,44 @@ func _build_hotel() -> void:
 		for z in [-9.6, 1.6]:
 			cyl(.25, .2, .5, brass, Vector3(x, .25, z))
 			sphere(.45, leaf, Vector3(x, 1.0, z)).scale = Vector3(1, 1.4, 1)
+	# a dance floor of glowing tiles in the middle, a mirror ball above it
+	var tiles := [emissive(Color(0.55, 0.2, 1.0), 0.9), emissive(Color(0.15, 0.45, 1.0), 0.9), emissive(Color(1.0, 0.65, 0.2), 0.9)]
+	for ix in 8:
+		for iz in 7:
+			box(Vector3(.47, .03, .47), tiles[(ix + iz * 2) % 3], Vector3(-1.75 + ix * .5, .015, -8.8 + iz * .5))
+	box(Vector3(4.15, .02, 3.65), brass, Vector3(0, .005, -7.3))
+	cyl(.004, .004, .7, brass, Vector3(0, 3.85, -7.3), self, 4)
+	var mirror := mat(Color(0.85, 0.85, 0.9), 1.0, 0.05)
+	sphere(.28, mirror, Vector3(0, 3.35, -7.3))
+	for i in 2:
+		var sl := SpotLight3D.new()
+		sl.light_color = [Color(0.7, 0.35, 1.0), Color(0.3, 0.6, 1.0)][i]
+		sl.light_energy = 3.0
+		sl.spot_range = 4.6
+		sl.spot_angle = 32
+		add_child(sl)
+		sl.look_at_from_position(Vector3(-1.2 + i * 2.4, 3.9, -7.6), Vector3(0, 0, -7.4))
+	# a DJ booth on a small stage under the windows, speakers either side
+	box(Vector3(3.4, .2, 1.1), panel, Vector3(0, .1, -9.85))
+	box(Vector3(1.6, .95, .55), black, Vector3(0, .67, -9.6))
+	box(Vector3(1.5, .5, .02), emissive(Color(0.6, 0.3, 1.0), 1.8), Vector3(0, .62, -9.32))
+	for dx in [-.45, .45]:
+		cyl(.16, .16, .02, mat(Color(0.2, 0.2, 0.2), 0.6, 0.3), Vector3(dx, 1.15, -9.62), self, 16)
+	for x in [-1.5, 1.5]:
+		box(Vector3(.5, 1.2, .45), black, Vector3(x, .8, -9.85))
+		cyl(.16, .16, .02, mat(Color(0.25, 0.25, 0.28), 0.4, 0.4), Vector3(x, .95, -9.62), self, 16).rotation.x = PI / 2
+	# long velvet lounge sofas along the left wall with coffee tables
+	var sofa := mat(Color(0.45, 0.1, 0.16), 0.0, 0.7)
+	for z in [-8.6, -6.0]:
+		box(Vector3(.8, .42, 2.2), sofa, Vector3(-7.85, .21, z))
+		box(Vector3(.22, .65, 2.2), sofa, Vector3(-8.2, .65, z))
+		for side in [-1, 1]:
+			box(Vector3(.8, .55, .2), sofa, Vector3(-7.85, .35, z + side * 1.1))
+		for k in 3:
+			box(Vector3(.15, .3, .4), mat(Color(0.85, 0.7, 0.4), 0.0, 0.7), Vector3(-8.0, .58, z - .7 + k * .7))
+		box(Vector3(.7, .06, 1.2), cream, Vector3(-6.85, .42, z))
+		box(Vector3(.5, .4, 1.0), brass, Vector3(-6.85, .2, z))
+		sphere(.04, emissive(Color(1.0, 0.7, 0.35), 4.0), Vector3(-6.85, .5, z))
 	# a brass and cream frame on the wall behind the back bar
 	box(Vector3(17, 2.2, .05), cream, Vector3(0, 3.1, 2.3))
 	_venue_sign("Grand Hotel Lounge", Vector3(0, 3.55, 2.2), Color(1.9, 1.6, 1.0), Color(0.6, 0.45, 0.15, 0.8), true)
@@ -1420,8 +1520,72 @@ func _build_speakeasy() -> void:
 			var h := _rng.randf_range(.28, .4)
 			box(Vector3(.26, h, w), mat(book_cols[_rng.randi() % book_cols.size()], 0, 0.7), Vector3(-6.0, y + h / 2, z + w / 2))
 			z += w + .005
+	# a little jazz stage on the right wall: upright piano, double bass, a microphone
+	var stage := Vector3(5.6, 0, -4.4)
+	box(Vector3(1.8, .22, 3.2), wood, stage + Vector3(0, .11, 0))
+	box(Vector3(.6, 1.3, 1.5), mat(Color(0.12, 0.05, 0.03), 0.1, 0.25), stage + Vector3(.5, .87, -.8))
+	box(Vector3(.25, .04, 1.3), mat(Color(0.95, 0.93, 0.88)), stage + Vector3(.12, 1.02, -.8))
+	# double bass on its stand: two rounded bouts, a waist, a long dark neck and scroll
+	var bass_wood := mat(Color(0.3, 0.13, 0.05), 0.0, 0.25)
+	var ebony := mat(Color(0.04, 0.03, 0.02), 0.0, 0.4)
+	var lower := sphere(.27, bass_wood, stage + Vector3(-.1, .62, .75))
+	lower.scale = Vector3(.32, 1.05, 1)
+	var upper := sphere(.2, bass_wood, stage + Vector3(-.1, 1.02, .75))
+	upper.scale = Vector3(.32, 1.0, 1)
+	box(Vector3(.05, .95, .06), ebony, stage + Vector3(-.13, 1.6, .75))
+	sphere(.05, bass_wood, stage + Vector3(-.13, 2.1, .75))
+	cyl(.01, .01, .3, steel_dark, stage + Vector3(-.1, .32, .75), self, 4)
+	var stand := mat(Color(0.75, 0.75, 0.78), 1.0, 0.3)
+	cyl(.012, .012, 1.4, stand, stage + Vector3(-.5, .92, .0), self, 6)
+	cyl(.15, .15, .02, stand, stage + Vector3(-.5, .23, .0), self, 12)
+	sphere(.04, stand, stage + Vector3(-.5, 1.64, .0))
+	var stage_light := SpotLight3D.new()
+	stage_light.light_color = Color(1.0, 0.75, 0.45)
+	stage_light.light_energy = 4.0
+	stage_light.spot_range = 5.0
+	stage_light.spot_angle = 35
+	add_child(stage_light)
+	stage_light.look_at_from_position(Vector3(3.6, 3.1, -4.4), stage + Vector3(0, .8, 0))
+	# oak barrels stacked in the corner
+	var barrel := mat(Color(0.4, 0.22, 0.1), 0.0, 0.7)
+	var hoop := mat(Color(0.15, 0.15, 0.15), 0.8, 0.4)
+	for b in [Vector3(-5.6, .35, -7.6), Vector3(-4.8, .35, -7.6), Vector3(-5.2, 1.0, -7.6)]:
+		var br := cyl(.32, .32, .9, barrel, b, self, 14)
+		br.rotation.z = PI / 2
+		for dx in [-.3, .3]:
+			var h := cyl(.335, .335, .04, hoop, b + Vector3(dx, 0, 0), self, 14)
+			h.rotation.z = PI / 2
+	# old framed photos on the brick, a red rug and a gramophone
+	var frame := mat(Color(0.35, 0.25, 0.1), 0.6, 0.4)
+	var photo := mat(Color.WHITE, 0.0, 0.8)
+	photo.albedo_texture = _noise_tex(0.03, _grad([Color(0.25, 0.18, 0.1), Color(0.75, 0.62, 0.42), Color(0.45, 0.34, 0.2)]))
+	for f in [Vector3(-3.0, 1.9, -8.94), Vector3(0, 2.0, -8.94), Vector3(3.0, 1.9, -8.94)]:
+		box(Vector3(.75, .95, .03), frame, f)
+		box(Vector3(.6, .8, .02), photo, f + Vector3(0, 0, .02))
+	for z in [-6.2, -1.2]:
+		box(Vector3(.03, .8, .62), frame, Vector3(6.43, 1.75, z))
+		box(Vector3(.02, .66, .5), photo, Vector3(6.41, 1.75, z))
+	var rug := mat(Color.WHITE, 0.0, 0.95)
+	rug.albedo_texture = _noise_tex(0.08, _grad([Color(0.32, 0.08, 0.06), Color(0.45, 0.15, 0.08), Color(0.4, 0.3, 0.14)]))
+	box(Vector3(5.0, .015, 3.0), rug, Vector3(0, .01, -5.6))
+	box(Vector3(5.2, .012, 3.2), mat(Color(0.55, 0.42, 0.15)), Vector3(0, .005, -5.6))
+	var gt := Vector3(-5.6, 0, -2.4)
+	cyl(.25, .25, .04, wood, gt + Vector3(0, .75, 0))
+	cyl(.04, .04, .75, wood, gt + Vector3(0, .37, 0), self, 8)
+	box(Vector3(.35, .14, .35), wood, gt + Vector3(0, .84, 0))
+	var horn := cyl(.2, .03, .45, mat(Color(0.85, 0.65, 0.3), 1.0, 0.25), gt + Vector3(.15, 1.15, 0), self, 14)
+	horn.rotation.z = -0.7
+	# low tables with lamps in the middle of the room
+	for t in [Vector3(-2.2, 0, -5.4), Vector3(2.2, 0, -5.8)]:
+		cyl(.35, .35, .04, wood, t + Vector3(0, .72, 0))
+		cyl(.04, .04, .72, steel_dark, t + Vector3(0, .36, 0), self, 8)
+		cyl(.03, .07, .25, mat(Color(0.7, 0.55, 0.3), 1.0, 0.3), t + Vector3(0, .86, 0), self, 10)
+		cyl(.06, .14, .14, emissive(Color(1.0, 0.6, 0.25), 2.5), t + Vector3(0, 1.03, 0), self, 12)
+		for side in [-1, 1]:
+			box(Vector3(.45, .45, .45), leather, t + Vector3(side * .7, .22, 0))
+			box(Vector3(.08, .4, .45), leather, t + Vector3(side * .92, .62, 0))
 	# warm pools of light: over the booths, the bookcase and the wall behind the bartender
-	for lp in [Vector3(-3.0, 2.4, -7.6), Vector3(3.0, 2.4, -7.6), Vector3(-5.2, 2.2, -4.5), Vector3(0, 2.6, 1.9)]:
+	for lp in [Vector3(-3.0, 2.4, -7.6), Vector3(3.0, 2.4, -7.6), Vector3(-4.8, 2.2, -4.0), Vector3(0, 2.6, 1.9)]:
 		var l := OmniLight3D.new()
 		l.light_color = Color(1.0, 0.62, 0.32)
 		l.light_energy = 2.4
@@ -1430,6 +1594,40 @@ func _build_speakeasy() -> void:
 		add_child(l)
 	# behind the bartender: brick, and the bar's name in old gold letters
 	_venue_sign("The Hidden Door", Vector3(0, 2.75, 2.3), Color(2.0, 1.45, 0.7), Color(0.5, 0.25, 0.05, 0.8), true)
+
+
+## The people around the room for this venue: model, where (hips for "sit", feet for the
+## rest), which way they face, and their pose.
+func crowd() -> Array:
+	match venue:
+		"beach":
+			return [
+				["josh", Vector3(-1.4, 0, -10.6), PI + .2, "arms_up"],
+				["megan", Vector3(1.6, 0, -10.9), PI - .3, "ready"],
+				["leonard", Vector3(-1.1, 0, -13.5), .1, "ready"],
+				["kate", Vector3(1.5, 0, -13.2), -.2, "ready"],
+				["louise", Vector3(1.4, .5, -8.05), 0.0, "sit"],
+			]
+		"hotel":
+			return [
+				["louise", Vector3(-1.0, 0, -6.7), .5, "dance"],
+				["leonard", Vector3(.9, 0, -7.6), -.6, "dance2"],
+				["megan", Vector3(-.2, 0, -8.5), .1, "dance2"],
+				["kate", Vector3(-7.62, .5, -8.6), PI / 2, "sit"],
+				["josh", Vector3(-7.62, .5, -6.0), PI / 2, "sit"],
+			]
+		"speakeasy":
+			return [
+				["louise", Vector3(5.3, .22, -4.4), -PI / 2, "sing"],
+				["leonard", Vector3(-4.4, .5, -8.3), 0.1, "sit"],
+				["megan", Vector3(1.5, .5, -8.3), -0.1, "sit"],
+				["josh", Vector3(-2.9, .5, -5.4), PI / 2, "sit"],
+			]
+	return [
+		["louise", Vector3(-2.6, .55, -7.62), .15, "sit"],
+		["leonard", Vector3(2.6, .55, -7.62), -.1, "sit"],
+		["megan", Vector3(2.95, .55, -7.62), -.35, "sit"],
+	]
 
 
 # ---------------------------------------------------------------- speed
