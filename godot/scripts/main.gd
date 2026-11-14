@@ -584,8 +584,8 @@ func show_menu() -> void:
 		Audio.set_sound(not Save.sound)
 		Audio.loop("crowd", Save.sound, -18.0)
 		show_menu(), 18, Color(0.25, 0.2, 0.3)))
-	row.add_child(_button("MUSIC: %s" % ("ON" if Save.music else "OFF"), func():
-		Audio.set_music(not Save.music)
+	row.add_child(_button("MUSIC: %s" % Audio.style_name(), func():
+		Audio.next_style()
 		show_menu(), 18, Color(0.25, 0.2, 0.3)))
 	row.add_child(_button("TV  +50 ●", _watch_tv, 18, Color(0.55, 0.4, 0.1)))
 	row.add_child(_button("RATE US", func(): OS.shell_open(STORE_URL), 18, Color(0.25, 0.2, 0.3)))

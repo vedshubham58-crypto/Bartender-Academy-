@@ -716,10 +716,22 @@ func build_tv() -> Label3D:
 
 
 ## (Re)builds the speed rail bottles, so mocktail mode can swap them.
+## Short names for the speed rail tags (the full name is on the ticket).
+const RAIL_TAGS := {
+	"apple": "Apple", "mango": "Mango", "grapefruit": "Grapefruit", "cucumber": "Cucumber",
+	"white_grape": "White Grape", "black_tea": "Black Tea", "apricot": "Apricot", "orange_cordial": "Orange Cordial",
+	"vanilla": "Vanilla", "blood_orange": "Blood Orange", "hibiscus": "Hibiscus", "elderflower": "Elderflower",
+}
+
+
 func build_rail() -> void:
 	for n in rail_nodes.values():
 		n.queue_free()
 	rail_nodes.clear()
+	# forget both modes' rail bottles, or a tap could find the hidden one in the same spot
+	for id in Recipes.RAIL:
+		pickables.erase(id)
+		pickables.erase(Recipes.MOCKTAIL_SWAP.get(id, id))
 	var ids := Recipes.rail()
 	for k in ids.size():
 		var p := Vector3(-0.825 + k * 0.15, RAIL_Y + .003, ZF + .06)
@@ -727,16 +739,17 @@ func build_rail() -> void:
 		rail_nodes[ids[k]].set_meta("dyn", true)
 		pickables[ids[k]] = p + Vector3(0, .15, 0)
 		var tag := Label3D.new()
-		tag.text = Recipes.SOURCES[ids[k]].name
-		tag.font_size = 30
+		tag.text = RAIL_TAGS.get(ids[k], Recipes.SOURCES[ids[k]].name)
+		tag.font_size = 25
 		tag.pixel_size = 0.0009
-		tag.width = 150
+		tag.width = 162
+		tag.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 		tag.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		tag.modulate = Color(1.0, 0.95, 0.85)
 		tag.outline_size = 8
 		tag.outline_modulate = Color(0, 0, 0, 0.9)
 		tag.shaded = false
-		tag.position = Vector3(0, .07, .065)
+		tag.position = Vector3(0, .015, .125)
 		tag.rotation.x = -0.6
 		rail_nodes[ids[k]].add_child(tag)
 

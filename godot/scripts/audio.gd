@@ -7,6 +7,23 @@ var _sfx := {}
 var _players: Array[AudioStreamPlayer] = []
 var _loops := {}
 var _music: AudioStreamPlayer
+var _radio_timer: Timer
+var _track := ""
+
+## The bar's music, all made by tools/make_music_party.py and tools/make_music_tracks.py.
+## id -> [file, name shown on the menu, volume dB]
+const TRACKS := {
+	"house": ["music_party", "HOUSE", -11.0],
+	"tropical": ["music_tropical", "TROPICAL", -11.0],
+	"disco": ["music_disco", "DISCO", -10.5],
+	"lounge": ["music_lounge", "LOUNGE JAZZ", -12.5],
+}
+## What the MUSIC button steps through.
+const STYLES := ["radio", "house", "tropical", "disco", "lounge", "off"]
+## Each bar's own sound, first on the radio there.
+const VENUE_TRACK := {"rooftop": "house", "beach": "tropical", "hotel": "disco", "speakeasy": "lounge"}
+## How many times a track plays before the radio moves on.
+const RADIO_PLAYS := 2
 
 
 func _ready() -> void:
@@ -28,15 +45,13 @@ func _ready() -> void:
 		p.stream = _sfx[n]
 		add_child(p)
 		_loops[n] = p
-	# upbeat house music, made by tools/make_music_party.py, loops forever under everything
 	_music = AudioStreamPlayer.new()
-	var m: AudioStreamOggVorbis = load("res://audio/music_party.ogg")
-	m.loop = true
-	_music.stream = m
-	_music.volume_db = -11.0
 	add_child(_music)
-	if Save.sound and Save.music and not _music.playing:
-		_music.play()
+	_radio_timer = Timer.new()
+	_radio_timer.one_shot = true
+	_radio_timer.timeout.connect(_next_on_radio)
+	add_child(_radio_timer)
+	call_deferred("start_music")
 
 
 func play(name: String, volume_db := 0.0, pitch := 1.0) -> void:
@@ -68,20 +83,74 @@ func set_sound(on: bool) -> void:
 	if not on:
 		for p in _loops.values():
 			p.stop()
-		_music.stop()
-	elif Save.music and not _music.playing:
-		_music.play()
 
 
 ## Music on or off, separate from the sound effects.
 func set_music(on: bool) -> void:
 	Save.music = on
 	Save.save()
-	if on and Save.sound:
-		if not _music.playing:
-			_music.play()
-	else:
+	start_music()
+
+
+## The MUSIC button: radio -> each track -> off -> radio.
+func next_style() -> void:
+	var i := STYLES.find(Save.music_style if Save.music else "off")
+	var nxt: String = STYLES[(i + 1) % STYLES.size()]
+	Save.music = nxt != "off"
+	if Save.music:
+		Save.music_style = nxt
+	Save.save()
+	start_music()
+
+
+## Menu label for the music button.
+func style_name() -> String:
+	if not Save.music:
+		return "OFF"
+	if Save.music_style == "radio":
+		return "RADIO"
+	return TRACKS.get(Save.music_style, ["", "RADIO"])[1]
+
+
+## (Re)starts the music for the current setting and bar.
+func start_music() -> void:
+	_radio_timer.stop()
+	if not Save.music:
 		_music.stop()
+		_track = ""
+		return
+	if Save.music_style == "radio" or not TRACKS.has(Save.music_style):
+		_play_track(VENUE_TRACK.get(Save.venue, "house") if _track == "" else _track, true)
+	else:
+		_play_track(Save.music_style, false)
+
+
+func _play_track(id: String, radio: bool) -> void:
+	var stream: AudioStreamOggVorbis = load("res://audio/%s.ogg" % TRACKS[id][0])
+	stream.loop = true
+	if _track != id or not _music.playing:
+		_music.stream = stream
+		_music.volume_db = TRACKS[id][2]
+		_music.play()
+	_track = id
+	if radio:
+		_radio_timer.start(stream.get_length() * RADIO_PLAYS)
+
+
+## Radio: fade the current track out and the next one in.
+func _next_on_radio() -> void:
+	if not Save.music or Save.music_style != "radio":
+		return
+	var ids := TRACKS.keys()
+	var nxt: String = ids[(ids.find(_track) + 1) % ids.size()]
+	var tw := create_tween()
+	tw.tween_property(_music, "volume_db", -40.0, 1.5)
+	tw.tween_callback(func():
+		_track = ""
+		_play_track(nxt, true)
+		var to: float = _music.volume_db
+		_music.volume_db = -40.0
+		create_tween().tween_property(_music, "volume_db", to, 1.5))
 
 
 ## Silences the game while a full-screen ad plays.

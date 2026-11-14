@@ -88,38 +88,40 @@ def esc(path):
 
 
 def to_vertical(avi, mp4, work, hook, below, cta, seconds, events):
-    # Text goes through files so quotes and colons in it need no escaping.
-    texts = {"hook": hook, "below": below, "cta": cta}
-    for k, e in enumerate(events):
-        texts[f"ev{k}"] = wrap(e["text"], 30)
-    files = {}
-    for k, v in texts.items():
-        files[k] = os.path.join(work, k + ".txt")
-        with open(files[k], "w") as f:
-            f.write(v)
+    # Text goes through files so quotes and colons in it need no escaping. Each line is its
+    # own drawtext: some ffmpeg builds draw the newline itself as a missing-glyph box.
+    files = []
+
+    def text(name, value, size, color, style, y, gap, enable=""):
+        out = []
+        for i, line in enumerate(value.split("\n")):
+            path = os.path.join(work, "%s%d.txt" % (name, i))
+            with open(path, "w") as f:
+                f.write(line)
+            files.append(path)
+            out.append(f"drawtext=fontfile={FONT}:textfile='{esc(path)}':fontsize={size}:fontcolor={color}:{style}"
+                       f"x=(w-text_w)/2:y={y + i * gap}{enable}")
+        return out
+
     end = max(seconds - 3.0, 0)
-    box = "box=1:boxcolor=black@0.55:boxborderw=28"
-    say = "box=1:boxcolor=white@0.94:boxborderw=26"
+    box = "box=1:boxcolor=black@0.55:boxborderw=28:"
+    say = "box=1:boxcolor=white@0.94:boxborderw=26:"
     lines = []
     for k, e in enumerate(events):
         a, b = max(0.0, e["at"]), min(e["end"], end)
         if b - a < 0.3:
             continue
         col = "0x2A1630" if e["kind"] == "say" else "0x1E1E1E"
-        lines.append(f"drawtext=fontfile={FONT}:textfile='{esc(files[f'ev{k}'])}':fontsize=50:fontcolor={col}:{say}:"
-                     f"x=(w-text_w)/2:y=1250:line_spacing=10:enable='between(t,{a:.2f},{b:.2f})'")
+        lines += text(f"ev{k}_", wrap(e["text"], 30), 50, col, say, 1250, 72, f":enable='between(t,{a:.2f},{b:.2f})'")
+    lines = text("hook", hook, 64, "white", box, 330, 90) + lines
+    lines += text("below", wrap(below, 30), 46, "0xFFD27A", "", 1450, 62)
+    lines += text("cta", cta, 52, "white", box, 1580, 76, f":enable='gte(t,{end:.2f})'")
     vf = (
         "[0:v]split=2[a][b];"
         "[a]scale=-2:1920,crop=1080:1920,boxblur=24:2,eq=brightness=-0.18[bg];"
         "[b]scale=1080:-2[fg];"
         "[bg][fg]overlay=0:(H-h)/2-60,"
-        f"drawtext=fontfile={FONT}:textfile='{esc(files['hook'])}':fontsize=64:fontcolor=white:{box}:"
-        "x=(w-text_w)/2:y=330:line_spacing=12,"
         + "".join(l + "," for l in lines) +
-        f"drawtext=fontfile={FONT}:textfile='{esc(files['below'])}':fontsize=46:fontcolor=0xFFD27A:"
-        "x=(w-text_w)/2:y=1450,"
-        f"drawtext=fontfile={FONT}:textfile='{esc(files['cta'])}':fontsize=52:fontcolor=white:{box}:"
-        f"x=(w-text_w)/2:y=1580:enable='gte(t,{end:.2f})',"
         "format=yuv420p[v]"
     )
     subprocess.run([
@@ -127,7 +129,7 @@ def to_vertical(avi, mp4, work, hook, below, cta, seconds, events):
         "-c:v", "libx264", "-preset", "medium", "-crf", "21", "-r", "30",
         "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-af", "loudnorm=I=-14:TP=-1.5",
         "-movflags", "+faststart", mp4], check=True)
-    for k in files.values():
+    for k in files:
         if os.path.exists(k):
             os.remove(k)
 
