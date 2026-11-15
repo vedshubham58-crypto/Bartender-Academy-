@@ -8,5 +8,15 @@
         <receiver
             android:name="com.vedshubham.neonads.ReminderReceiver"
             android:exported="false" />
+        <!-- lets the share sheet read the score card picture the game saves -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.neonshare"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/neon_share_paths" />
+        </provider>
     </application>
 </manifest>

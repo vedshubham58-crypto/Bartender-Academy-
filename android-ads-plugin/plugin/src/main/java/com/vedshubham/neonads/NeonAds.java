@@ -5,6 +5,7 @@ import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.view.Gravity;
 import android.view.ViewGroup;
@@ -14,6 +15,9 @@ import java.util.Calendar;
 
 import androidx.annotation.NonNull;
 import androidx.collection.ArraySet;
+import androidx.core.content.FileProvider;
+
+import java.io.File;
 
 import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
@@ -135,6 +139,34 @@ public class NeonAds extends GodotPlugin {
                     manager.launchReviewFlow(activity, info);
                 }
             });
+        });
+    }
+
+    /**
+     * Opens Android's share sheet (WhatsApp, Instagram, ...) with a picture saved by the game
+     * in its own files folder, plus a line of text. Falls back to text only if the picture is missing.
+     */
+    @UsedByGodot
+    public void shareImage(String path, String text) {
+        Activity activity = getActivity();
+        if (activity == null) return;
+        activity.runOnUiThread(() -> {
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.putExtra(Intent.EXTRA_TEXT, text);
+            File file = new File(path);
+            if (file.exists()) {
+                Uri uri = FileProvider.getUriForFile(activity, activity.getPackageName() + ".neonshare", file);
+                send.setType("image/png");
+                send.putExtra(Intent.EXTRA_STREAM, uri);
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } else {
+                send.setType("text/plain");
+            }
+            try {
+                activity.startActivity(Intent.createChooser(send, null));
+            } catch (Exception ignored) {
+                // no app can share; nothing to do
+            }
         });
     }
 

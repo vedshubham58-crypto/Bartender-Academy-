@@ -22,4 +22,5 @@ dependencies {
     compileOnly("com.google.android.gms:play-services-ads:23.6.0")
     compileOnly("com.google.android.ump:user-messaging-platform:3.1.0")
     compileOnly("com.google.android.play:review:2.0.2")
+    compileOnly("androidx.core:core:1.13.1")
 }

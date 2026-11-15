@@ -64,6 +64,15 @@ func request_review() -> void:
 		_ads.requestReview()
 
 
+## Android's share sheet with a picture (absolute path) and a line of text.
+## Returns false where sharing isn't available (desktop), so the caller can say so.
+func share_image(path: String, text: String) -> bool:
+	if _ads:
+		_ads.shareImage(path, text)
+		return true
+	return false
+
+
 ## Opens Google's consent form so the player can change their ad choices.
 func show_privacy_options() -> void:
 	if _ads:
