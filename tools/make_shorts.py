@@ -127,7 +127,14 @@ def to_vertical(avi, mp4, work, fmt, opener, d1, cta, seconds, events, music):
 
     # where the finished drink is on screen: the mistake line, else a few seconds before the end
     say = [e for e in events if e.get("kind") == "say"]
-    shot = say[-1]["at"] + 0.3 if fmt == "mistake" and len(say) > 1 else max(seconds - 7.0, 0.0)
+    # (mistake: the "something is wrong" line; others: the drink just finished, a few seconds
+    # before the last guest's thank-you, when the glass is in front of the camera)
+    if fmt == "mistake" and len(say) > 1:
+        shot = say[-1]["at"] + 0.3
+    elif len(say) > 1:
+        shot = max(say[-1]["at"] - 3.0, 0.0)
+    else:
+        shot = max(seconds - 7.0, 0.0)
     learn = fmt == "learn"
     speed = 1.0 if learn else 1.65
     body_end = shot if fmt == "mistake" else max(seconds - 3.0, 1.0)
@@ -154,7 +161,8 @@ def to_vertical(avi, mp4, work, fmt, opener, d1, cta, seconds, events, music):
     if fmt == "mistake":
         segs.append((shot - 0.7, 3.6, 1.0, 1.7, [text("DID YOU SPOT IT?", 92, GOLD, 260),
                                                  text("Answer in the comments", 62, "white", 1580, SMALL)]))
-    tail = max(seconds - 3.0, 0.0)
+    # the end card sits over the finished drink too, not the guest walking off
+    tail = max(seconds - 3.0, 0.0) if fmt == "mistake" else max(shot - 0.3, 0.0)
     segs.append((tail, 2.8, 1.0, 1.25, [text("Bartender:", 80, "white", 200), text("Cocktail Academy", 80, GOLD, 295),
                                         text(cta, fit(cta, 58), "white", 1560, SMALL),
                                         text("18+ only. Drink responsibly.", 44, "white", 1650, SMALL)]))
