@@ -10,7 +10,7 @@
             android:exported="false" />
         <!-- lets the share sheet read the score card picture the game saves -->
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name="com.vedshubham.neonads.NeonShareProvider"
             android:authorities="${applicationId}.neonshare"
             android:exported="false"
             android:grantUriPermissions="true">
