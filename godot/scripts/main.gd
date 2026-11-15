@@ -1964,12 +1964,41 @@ func _score_card(unlocked: String, new_best: bool) -> void:
 	row.add_theme_constant_override("separation", 14)
 	row.add_child(_button("Bar Book", show_book, 22, Color(0.25, 0.2, 0.3)))
 	row.add_child(_button("Menu", show_menu, 22, Color(0.25, 0.2, 0.3)))
+	var share_b := _button("SHARE MY SCORE", func(): pass, 22, Color(0.2, 0.45, 0.6))
+	share_b.pressed.connect(_share_score.bind(v, grade))
+	row.add_child(share_b)
 	v.add_child(row)
 	# a finished shift is a good moment for Google's rating card, a couple of times only
 	if Save.shifts in REVIEW_AFTER_SHIFTS and not Save.review_asked.has(Save.shifts):
 		Save.review_asked.append(Save.shifts)
 		Save.save()
 		get_tree().create_timer(1.6).timeout.connect(Ads.request_review)
+
+
+## Saves the score card as a picture (without the buttons) and opens the share sheet.
+func _share_score(card: Control, grade: String) -> void:
+	Audio.play("click", -4.0)
+	var hidden := []
+	for b in card.find_children("*", "BaseButton", true, false):
+		if b.visible:
+			b.visible = false
+			hidden.append(b)
+	var tag := _label("Bartender: Cocktail Academy  ·  Free on Google Play", 22, C_GOLD)
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	card.add_child(tag)
+	await RenderingServer.frame_post_draw
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	tag.queue_free()
+	for b in hidden:
+		if is_instance_valid(b):
+			b.visible = true
+	DirAccess.make_dir_recursive_absolute("user://share")
+	var path := ProjectSettings.globalize_path("user://share/score-card.png")
+	img.save_png(path)
+	var text := "I scored %d (grade %s) on my shift behind the bar in Bartender: Cocktail Academy. Can you beat me? %s" % [shift_stats.score, grade, STORE_URL]
+	if not Ads.share_image(path, text):
+		show_toast("Sharing works on your phone", C_GOLD, 40)
 
 
 ## "Next shift unlocks: X & Y", the reason to play one more.

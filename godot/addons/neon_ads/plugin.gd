@@ -32,7 +32,8 @@ class NeonAdsExport extends EditorExportPlugin:
 	func _get_android_dependencies(platform: EditorExportPlatform, debug: bool) -> PackedStringArray:
 		return PackedStringArray(["com.google.android.gms:play-services-ads:23.6.0",
 			"com.google.android.ump:user-messaging-platform:3.1.0",
-			"com.google.android.play:review:2.0.2"])
+			"com.google.android.play:review:2.0.2",
+			"androidx.core:core:1.13.1"])
 
 	func _get_android_manifest_application_element_contents(platform: EditorExportPlatform, debug: bool) -> String:
 		return '<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="%s"/>' % ADMOB_APP_ID
