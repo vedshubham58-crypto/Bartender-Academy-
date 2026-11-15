@@ -69,6 +69,23 @@ CAPTIONS = {
 HASHTAGS = ["#bartender", "#cocktails", "#mobilegame", "#bartendergame", "#mixology", "#cocktailrecipe",
             "#androidgames", "#simulator", "#satisfying", "#gaming", "#indiegame", "#drinkresponsibly"]
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+# Inter (apt fonts-inter) looks cleaner; fall back to DejaVu when it isn't installed.
+BIG = "/usr/share/fonts/opentype/inter/Inter-ExtraBold.otf"
+SMALL = "/usr/share/fonts/opentype/inter/Inter-Bold.otf"
+if not os.path.exists(BIG):
+    BIG = SMALL = FONT
+GOLD = "0xFFC93C"
+# One clean music bed per clip (the game's own sounds are dropped), rotating by day.
+MUSIC = ["music_disco", "music_tropical", "music_party", "music_lounge"]
+# Big two-line text on the first frames: (white line, gold line). Short, a dare or a question.
+OPENERS = {
+    "mistake": [("ONLY REAL BARTENDERS", "SPOT THIS MISTAKE"), ("ONE THING IS WRONG", "CAN YOU SEE IT?")],
+    "guest": [("YOUR FIRST ORDER", "OF THE NIGHT"), ("A GUEST WALKS UP", "TO YOUR BAR")],
+    "cinematic": [("ROOFTOP BAR", "AFTER SUNSET"), ("THIS IS WHAT A", "BAR SHIFT LOOKS LIKE")],
+    "learn": [("SAVE THIS", "{D1} RECIPE"), ("HOW A {D1}", "IS REALLY MADE")],
+    "regulars": [("GUESTS EVERY", "BARTENDER KNOWS"), ("EVERY BAR", "HAS THIS GUEST")],
+    "pov": [("PERFECT POUR", "OR FAIL?"), ("YOUR FIRST SHIFT", "AT A ROOFTOP BAR")],
+}
 
 
 def render(godot, avi, stats, fmt, drinks, theme, skin, bartender):
@@ -87,49 +104,83 @@ def esc(path):
     return path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
-def to_vertical(avi, mp4, work, hook, below, cta, seconds, events):
-    # Text goes through files so quotes and colons in it need no escaping. Each line is its
-    # own drawtext: some ffmpeg builds draw the newline itself as a missing-glyph box.
+def to_vertical(avi, mp4, work, fmt, opener, d1, cta, seconds, events, music):
+    """Hook-first vertical cut, as Shubham asked on 2026-11-15:
+    1. the finished drink, zoomed in, with a big two-line dare (2.2 s)
+    2. the making, sped up, with the question on top
+    3. (mistake) the drink again: "Did you spot it? Answer in the comments"
+    4. end card with the game name and the call to action
+    The game's own sounds are dropped for one music track."""
     files = []
 
-    def text(name, value, size, color, style, y, gap, enable=""):
-        out = []
-        for i, line in enumerate(value.split("\n")):
-            path = os.path.join(work, "%s%d.txt" % (name, i))
-            with open(path, "w") as f:
-                f.write(line)
-            files.append(path)
-            out.append(f"drawtext=fontfile={FONT}:textfile='{esc(path)}':fontsize={size}:fontcolor={color}:{style}"
-                       f"x=(w-text_w)/2:y={y + i * gap}{enable}")
-        return out
+    def text(value, size, color, y, font=BIG, enable=""):
+        path = os.path.join(work, "t%d.txt" % len(files))
+        with open(path, "w") as f:
+            f.write(value)
+        files.append(path)
+        return (f"drawtext=fontfile={font}:textfile='{esc(path)}':fontsize={size}:fontcolor={color}"
+                f":borderw=6:bordercolor=black@0.85:x=(w-text_w)/2:y={y}{enable}")
 
-    end = max(seconds - 3.0, 0)
-    box = "box=1:boxcolor=black@0.55:boxborderw=28:"
-    say = "box=1:boxcolor=white@0.94:boxborderw=26:"
-    lines = []
-    for k, e in enumerate(events):
-        a, b = max(0.0, e["at"]), min(e["end"], end)
-        if b - a < 0.3:
-            continue
-        col = "0x2A1630" if e["kind"] == "say" else "0x1E1E1E"
-        lines += text(f"ev{k}_", wrap(e["text"], 30), 50, col, say, 1250, 72, f":enable='between(t,{a:.2f},{b:.2f})'")
-    lines = text("hook", hook, 64, "white", box, 330, 90) + lines
-    lines += text("below", wrap(below, 30), 46, "0xFFD27A", "", 1450, 62)
-    lines += text("cta", cta, 52, "white", box, 1580, 76, f":enable='gte(t,{end:.2f})'")
-    vf = (
-        "[0:v]split=2[a][b];"
-        "[a]scale=-2:1920,crop=1080:1920,boxblur=24:2,eq=brightness=-0.18[bg];"
-        "[b]scale=1080:-2[fg];"
-        "[bg][fg]overlay=0:(H-h)/2-60,"
-        + "".join(l + "," for l in lines) +
-        "format=yuv420p[v]"
-    )
+    def fit(value, size):
+        # keep one line inside the 1080 px frame (about 0.62 em per capital letter)
+        return min(size, int(1000 / (0.62 * max(len(value), 1))))
+
+    # where the finished drink is on screen: the mistake line, else a few seconds before the end
+    say = [e for e in events if e.get("kind") == "say"]
+    shot = say[-1]["at"] + 0.3 if fmt == "mistake" and len(say) > 1 else max(seconds - 7.0, 0.0)
+    learn = fmt == "learn"
+    speed = 1.0 if learn else 1.65
+    body_end = shot if fmt == "mistake" else max(seconds - 3.0, 1.0)
+    segs = []  # (start, length in output seconds, speed, zoom, [text filters])
+    w1, w2 = opener
+    segs.append((shot, 2.2, 1.0, 1.9, [text(w1, fit(w1, 82), "white", 200), text(w2, fit(w2, 92), GOLD, 300),
+                                       text("Watch closely", 58, "white", 1580, SMALL)]))
+    if fmt == "mistake":
+        top, sub = f"1 MISTAKE IN THIS {d1.upper()}", "Can you find it?"
+    elif learn:
+        top, sub = f"HOW TO MAKE {article(d1).upper()}", "Step by step"
+    else:
+        top, sub = d1.upper(), "Made behind the bar"
+    body = [text(top, fit(top, 66), "white", 230), text(sub, 60, GOLD, 320, SMALL),
+            text("Bartender: Cocktail Academy", 46, "white", 1600, SMALL)]
+    # what guests say / which step it is, in the sped-up timeline, under the picture
+    for e in events:
+        a, b = (e["at"] - 0.6) / speed, (min(e["end"], body_end) - 0.6) / speed
+        if b - a >= 0.4 and e["at"] < body_end:
+            body.append(text(wrap(e["text"], 34).split("\n")[0], 44, "0xFFE7B0", 1500, SMALL,
+                             f":enable='between(t,{max(a, 0):.2f},{b:.2f})'"))
+    blen = max((body_end - 0.6) / speed, 3.0)
+    segs.append((0.6, blen, speed, 1.45, body))
+    if fmt == "mistake":
+        segs.append((shot - 0.7, 3.6, 1.0, 1.7, [text("DID YOU SPOT IT?", 92, GOLD, 260),
+                                                 text("Answer in the comments", 62, "white", 1580, SMALL)]))
+    tail = max(seconds - 3.0, 0.0)
+    segs.append((tail, 2.8, 1.0, 1.25, [text("Bartender:", 80, "white", 200), text("Cocktail Academy", 80, GOLD, 295),
+                                        text(cta, fit(cta, 58), "white", 1560, SMALL),
+                                        text("18+ only. Drink responsibly.", 44, "white", 1650, SMALL)]))
+    parts = []
+    for i, (start, length, sp, zoom, lines) in enumerate(segs):
+        gw, gh = int(1080 * zoom) // 2 * 2, int(608 * zoom) // 2 * 2
+        cut = f"trim=start={start:.2f}:duration={length * sp:.2f},setpts=(PTS-STARTPTS)/{sp}"
+        vf = (f"[0:v]{cut},split=2[a][b];"
+              f"[a]scale=3410:1920,crop=1080:1920,boxblur=30:3,eq=brightness=-0.22:saturation=1.2[bg];"
+              f"[b]scale={gw}:{gh},crop=1080:{min(gh, 1000)}[fg];"
+              f"[bg][fg]overlay=0:(H-h)/2+50,fps=30," + "".join(l + "," for l in lines) + "format=yuv420p[v]")
+        part = os.path.join(work, f"part{i}.mp4")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", avi, "-filter_complex", vf, "-map", "[v]", "-an",
+                        "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-r", "30", part], check=True)
+        parts.append(part)
+    lst = os.path.join(work, "parts.txt")
+    with open(lst, "w") as f:
+        f.write("".join(f"file '{p}'\n" for p in parts))
+    total = sum(s[1] for s in segs)
     subprocess.run([
-        "ffmpeg", "-v", "error", "-y", "-i", avi, "-filter_complex", vf, "-map", "[v]", "-map", "0:a?",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "21", "-r", "30",
-        "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-af", "loudnorm=I=-14:TP=-1.5",
-        "-movflags", "+faststart", mp4], check=True)
-    for k in files:
+        "ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", lst, "-ss", "8", "-i", music,
+        "-filter_complex", f"[1:a]atrim=duration={total:.2f},afade=t=in:d=0.2,afade=t=out:st={total - 1.2:.2f}:d=1.2,"
+                           "loudnorm=I=-14:TP=-1.5[a]",
+        "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-ar", "44100",
+        "-shortest", "-movflags", "+faststart", mp4], check=True)
+    for k in files + parts + [lst]:
         if os.path.exists(k):
             os.remove(k)
 
@@ -208,14 +259,12 @@ def main():
         fill = {"d1": d1, "d2": d2, "a_d1": article(d1), "cta": a.cta,
                 "home": "\n".join(f"{i}. {h}" for i, h in enumerate(home, 1))}
         hook = rnd.choice(HOOKS[fmt]).format(**fill)
-        below = f"How to make {article(d1)}" if fmt == "learn" else (d1 if d1 == d2 else f"{d1}  +  {d2}")
-        if fmt == "mistake":
-            below = f"What's wrong with this {d1}?"
-        elif fmt == "regulars":
-            below = "Every bartender knows these guests"
         name = os.path.join(a.out, f"bartender-{a.date}-{n}")
-        to_vertical(base + ".avi", name + ".mp4", a.out, wrap(hook), below, a.cta,
-                    duration(base + ".avi"), s.get("events", []))
+        w1, w2 = rnd.choice(OPENERS[fmt])
+        opener = (w1.format(D1=d1.upper()), w2.format(D1=d1.upper()))
+        music = os.path.join("godot", "audio", MUSIC[(day + n) % len(MUSIC)] + ".ogg")
+        to_vertical(base + ".avi", name + ".mp4", a.out, fmt, opener, d1, a.cta,
+                    duration(base + ".avi"), s.get("events", []), os.path.abspath(music))
         title = rnd.choice(TITLES[fmt]).format(**fill)[:100]
         tags = HASHTAGS[:4] + rnd.sample(HASHTAGS[4:-1], 4) + ["#drinkresponsibly"]
         caption = rnd.choice(CAPTIONS[fmt]).format(**fill) + "\n\n18+ only. Drink responsibly.\n\n" + " ".join(tags)
