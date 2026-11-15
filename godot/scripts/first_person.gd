@@ -19,6 +19,7 @@ var _started := false
 ## How far the neck sits under your eyes. Close to a real body's, so the arms reach down into
 ## the station instead of lying flat across the screen.
 const NECK_DROP := 0.19
+const NECK_BACK := 0.26 ## how far the neck slides back when you look down at the station
 ## The body leans toward the hand that is working so the arm stays nearly straight and
 ## points away from the camera: you see a hand and a short wrist, not a long forearm.
 const REACH := 0.9 ## fraction of the arm's length the shoulder keeps from the hand
@@ -65,8 +66,11 @@ func update(cam: Camera3D, dt: float) -> void:
 	fwd = fwd.normalized()
 	var right := fwd.cross(Vector3.UP)
 	node.rotation = Vector3(0, atan2(fwd.x, fwd.z), 0)
-	# neck just under the camera, a little in front, so the shoulders can reach the station
-	var want := cam.global_position + fwd * 0.06 + Vector3.DOWN * NECK_DROP
+	# neck just under the camera, a little in front, so the shoulders can reach the station.
+	# Looking down at the station, the neck slides back and a bit lower so your own collar
+	# never shows at the bottom of the screen.
+	var down := clampf((cam.global_transform.basis.z.y - 0.1) / 0.4, 0.0, 1.0)
+	var want := cam.global_position + fwd * (0.06 - NECK_BACK * down) + Vector3.DOWN * (NECK_DROP + 0.08 * down)
 	node.global_position += want - People.world_pos(s, "Neck")
 	# eased, so a hand glides to the next tool instead of jumping
 	var k := 1.0 - exp(-minf(dt, 0.05) * 12.0)
