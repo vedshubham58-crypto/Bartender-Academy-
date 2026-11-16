@@ -1484,7 +1484,9 @@ func _strain() -> void:
 		return
 	_straining = true
 	var tw := create_tween()
-	var over := glass_node.position + Vector3(0.09, _glass_top() + 0.12, 0)
+	# low and just right of the glass, so the hand holding the tin's base can reach it and
+	# the tipped tin's mouth sits right over the rim
+	var over := glass_node.position + Vector3(0.17, _glass_top() + 0.05, 0)
 	tw.tween_property(tin_node, "position", over, 0.21)
 	tw.parallel().tween_property(tin_node, "rotation:z", 1.9, 0.21)
 	Audio.play("pour", -8.0)
@@ -2614,15 +2616,12 @@ func _update_hands(delta: float) -> void:
 				rt = up
 				lt = up
 			else:
-				# straining: the right hand holds the tin from the side, the left steadies it
-				r = tin_node.to_global(Vector3(0, .1, 0)) + right * 0.06 - fwd * 0.02
-				l = tin_node.to_global(Vector3(0, .16, 0)) - right * 0.06 - fwd * 0.02
-				rg = 0.85
-				lg = 0.6
-				rd = -right
-				ld = right
-				rt = up
-				lt = up
+				# straining: one hand only. The right hand holds the base end of the tipped tin
+				# from the right (its mouth points left, over the glass) and the left hand stays
+				# down, so the arms never cross in front of the camera
+				hold = tin_node.to_global(Vector3(0, .05, 0))
+				hold_g = 0.9
+				hold_side = 1.0
 	if time < _reach_until:
 		r = _reach_pos + Vector3(0.02, 0.0, 0.06)
 		rg = 0.55
