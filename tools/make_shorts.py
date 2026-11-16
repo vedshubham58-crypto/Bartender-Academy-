@@ -75,6 +75,15 @@ SMALL = "/usr/share/fonts/opentype/inter/Inter-Bold.otf"
 if not os.path.exists(BIG):
     BIG = SMALL = FONT
 GOLD = "0xFFC93C"
+# Under the opening picture, per format.
+TEASE = {"mistake": "Watch closely", "regulars": "Tag a bartender", "guest": "Order up!",
+         "learn": "Save it for later", "cinematic": "Sound on", "pov": "Could you do it?",
+         "whatif": "Wait for the end"}
+# Over the sped-up making: (white line, gold line).
+BODY_TOP = {"regulars": ("EVERY BAR HAS THESE GUESTS", "Which one is yours?"),
+            "guest": ("ONE {D1}, COMING UP", "Made behind the bar"),
+            "pov": ("PERFECT POUR OR FAIL?", "Your shift starts now"),
+            "whatif": ("WHAT HAPPENS IF...", "Watch the guest's face")}
 # One clean music bed per clip (the game's own sounds are dropped), rotating by day.
 MUSIC = ["music_disco", "music_tropical", "music_party", "music_lounge"]
 # Big two-line text on the first frames: (white line, gold line). Short, a dare or a question.
@@ -136,26 +145,32 @@ def to_vertical(avi, mp4, work, fmt, opener, d1, cta, seconds, events, music):
     else:
         shot = max(seconds - 7.0, 0.0)
     learn = fmt == "learn"
-    speed = 1.0 if learn else 1.65
+    # guests' lines are the joke in these formats, so they need time to be read
+    speed = 1.0 if learn else (1.25 if fmt in ("regulars", "guest", "whatif") else 1.65)
     body_end = shot if fmt == "mistake" else max(seconds - 3.0, 1.0)
     segs = []  # (start, length in output seconds, speed, zoom, [text filters])
     w1, w2 = opener
     segs.append((shot, 2.2, 1.0, 1.9, [text(w1, fit(w1, 82), "white", 200), text(w2, fit(w2, 92), GOLD, 300),
-                                       text("Watch closely", 58, "white", 1580, SMALL)]))
+                                       text(TEASE.get(fmt, "Watch closely"), 58, "white", 1580, SMALL)]))
     if fmt == "mistake":
         top, sub = f"1 MISTAKE IN THIS {d1.upper()}", "Can you find it?"
     elif learn:
         top, sub = f"HOW TO MAKE {article(d1).upper()}", "Step by step"
+    elif fmt in BODY_TOP:
+        top, sub = BODY_TOP[fmt]
+        top = top.format(D1=d1.upper())
     else:
         top, sub = d1.upper(), "Made behind the bar"
     body = [text(top, fit(top, 66), "white", 230), text(sub, 60, GOLD, 320, SMALL),
-            text("Bartender: Cocktail Academy", 46, "white", 1600, SMALL)]
+            text("Bartender: Cocktail Academy", 44, "white", 1690, SMALL)]
     # what guests say / which step it is, in the sped-up timeline, under the picture
     for e in events:
         a, b = (e["at"] - 0.6) / speed, (min(e["end"], body_end) - 0.6) / speed
         if b - a >= 0.4 and e["at"] < body_end:
-            body.append(text(wrap(e["text"], 34).split("\n")[0], 44, "0xFFE7B0", 1500, SMALL,
-                             f":enable='between(t,{max(a, 0):.2f},{b:.2f})'"))
+            b = max(b, a + 2.2)
+            for i, line in enumerate(wrap(e["text"], 28).split("\n")[:2]):
+                body.append(text(line, 52, "0xFFE7B0", 1490 + i * 66, SMALL,
+                                 f":enable='between(t,{max(a, 0):.2f},{b:.2f})'"))
     blen = max((body_end - 0.6) / speed, 3.0)
     segs.append((0.6, blen, speed, 1.45, body))
     if fmt == "mistake":
