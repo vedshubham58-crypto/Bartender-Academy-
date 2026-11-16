@@ -11,6 +11,9 @@ extends "res://tests/app_test.gd"
 ##   mistake    one drink made with one deliberate mistake (wrong garnish, ice or rim) for
 ##              bartenders to spot in the comments; the answer goes to the stats file
 ##   regulars   comedy: guests every bartender knows ("Strong, but not too strong")
+##   whatif     "What happens if...": way too much spirit (steam out of the ears), far too little
+##              (a green "yuck"), then a flawless fast drink for the secret Legendary Serve.
+##              Narration lines go to the stats file as "vo" events for the voiceover.
 ## It writes what was made and a timeline of lines to show (who says what, which step) to the
 ## stats file, and quits.
 
@@ -26,6 +29,13 @@ var _shot_len := 3.0
 var _alt := 0
 var _serving_to := -1
 var _close: Node3D = null ## the finished glass, for the close-up at the end of a mistake clip
+var _face_gi := 1 ## the guest the "face" shot looks at (their reaction to the drink)
+## whatif: [narration before the drink, ml over the line on every pour, narration after]
+const WHATIF := [
+	["What happens if you pour WAY too much?", 24.0, "Steam. Out of the ears."],
+	["And if you barely pour anything?", -22.0, "Yeah... that's a no."],
+	["But what if your drink is PERFECT?", 0.0, "The secret Legendary Serve!"],
+]
 
 ## Camera spots around the bar: [from, to, look at, fov]. The camera drifts from "from" to "to"
 ## over the shot, so nothing is ever a dead still.
@@ -85,6 +95,12 @@ func _ready() -> void:
 	var ids: PackedStringArray = opts.drinks.split(",")
 	if f == "learn" or f == "mistake":
 		ids = ids.slice(0, 1)
+	if f == "whatif":
+		while ids.size() < 3:
+			ids.append(["daiquiri", "margarita", "cosmopolitan"][ids.size()])
+		ids = ids.slice(0, 3)
+		_vo("What happens if you serve a really bad drink?", 2.6)
+		await _secs(2.4)
 	var answer := ""
 	var made := []
 	var coins0: int = Save.coins
@@ -93,6 +109,8 @@ func _ready() -> void:
 	await _secs(1.2 if not film else 0.4)
 	for k in ids.size():
 		var gi := 1 if k % 2 == 0 else 2
+		if f == "whatif":
+			gi = [1, 2, 0][k]
 		var g: Dictionary = main.guests[gi]
 		if g.served:
 			g.served.queue_free()
@@ -108,7 +126,15 @@ func _ready() -> void:
 			answer = m[2]
 		g.order = d
 		g.patience = 100.0
-		if f == "guest" or f == "mistake":
+		if f == "whatif":
+			pour_extra = WHATIF[k][1]
+			if k == 2:
+				# the secret needs a drink you know by heart: no recipe card, every pour on the line
+				Save.made[d.id] = 5
+				Save.best[d.id] = 3.0
+			_vo(WHATIF[k][0], 2.4)
+			await _secs(0.4)
+		elif f == "guest" or f == "mistake":
 			_cut("guest%d" % gi, 2.6)
 			_say(ORDER_LINES[(k + ids.size()) % ORDER_LINES.size()] % _a(d.name), 2.6)
 			await _secs(2.6)
@@ -125,6 +151,17 @@ func _ready() -> void:
 		_last_step = -2
 		_serving_to = -1
 		await make(gi, false)
+		if f == "whatif":
+			pour_extra = 0.0
+			_face_gi = gi
+			_cut("face", 5.0 if k == 2 else 4.4)
+			_vo(WHATIF[k][2], 2.2, 2.6 if k < 2 else 1.4)
+			await _secs(5.0 if k == 2 else 4.4)
+			_pov()
+			if k == 2:
+				_vo("Can you find it? Play free soon.", 2.6, 0.2)
+			made.append({"id": ids[k], "name": d.name, "method": d.get("method", ""), "home": d.get("home", [])})
+			continue
 		if f == "guest":
 			_say(THANKS[k % THANKS.size()].replace("%s", d.name), 2.0, 0.6)
 		elif f == "regulars":
@@ -153,6 +190,15 @@ func _a(name: String) -> String:
 
 func _now() -> float:
 	return (Engine.get_process_frames() - _frame0) / 30.0
+
+
+## A narration line for the voiceover (and its captions).
+func _vo(text: String, secs: float, delay := 0.0) -> void:
+	var at := _now() + delay
+	for e in events:
+		if e.kind == "vo":
+			at = maxf(at, e.end + 0.1)
+	events.append({"at": at, "end": at + secs, "kind": "vo", "text": text})
 
 
 func _say(text: String, secs: float, delay := 0.0) -> void:
@@ -187,10 +233,20 @@ func _process(delta: float) -> void:
 	sk.set_bone_pose_scale(People.bone(sk, "Neck"), Vector3.ONE * (0.001 if _shot == "" else 1.0))
 	if _shot == "":
 		main.cam.make_current()
-		main.hud.visible = f in ["pov", "guest", "mistake", "regulars"]
+		main.hud.visible = f in ["pov", "guest", "mistake", "regulars", "whatif"]
 		return
 	var k := clampf(_shot_t / _shot_len, 0.0, 1.0)
 	k = k * k * (3.0 - 2.0 * k)
+	if _shot == "face":
+		# from your side of the bar, close on the guest's face as they taste it
+		var g: Dictionary = main.guests[_face_gi]
+		var hp: Vector3 = main._head_pos(g) + Vector3(0, 0.02, 0)
+		var cp2: Vector3 = hp + Vector3(lerpf(0.34, 0.24, k), -0.08, lerpf(1.15, 0.9, k))
+		pcam.global_transform = Transform3D(Basis.looking_at(hp - cp2), cp2)
+		pcam.fov = 50.0
+		pcam.make_current()
+		main.hud.visible = false
+		return
 	if _shot == "close" and is_instance_valid(_close):
 		# from the guest's side of the bar, a little to the left, pushing in
 		var gp := _close.global_position + Vector3(0, 0.07, 0)

@@ -59,6 +59,13 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq xvfb ffmpeg libgl1-mesa-dri fonts-dejavu-core fonts-inter > /dev/null
 
+      - name: Voice for narrated clips (Piper TTS, LibriTTS voice, CC BY 4.0)
+        run: |
+          pip install -q piper-tts==1.8.0
+          mkdir -p ~/voice && cd ~/voice
+          curl -sSfL https://github.com/rhasspy/piper/releases/download/v0.0.2/voice-en-us-libritts-high.tar.gz | tar xz
+          echo "PIPER_VOICE=$HOME/voice/en-us-libritts-high.onnx" >> "$GITHUB_ENV"
+
       - name: Import project
         run: godot --headless --path godot --import || true
 

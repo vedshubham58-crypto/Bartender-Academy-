@@ -14,6 +14,7 @@ var bartender := "" ## "remy" (Leo) or "louise" (Mia); "" = not chosen yet
 var sound := true
 var music := true
 var music_style := "radio" ## "radio" (all tracks in turn) or one of Audio.TRACKS
+var legends := 0 ## secret legendary serves so far
 var asked_notify := false
 var best_score := 0 ## best shift score, for the NEW BEST! on the score card
 var owned: Array = ["tools_steel", "lights_warm"] ## shop items bought
@@ -121,6 +122,7 @@ func load_game() -> void:
 	sound = bool(data.get("sound", true))
 	music = bool(data.get("music", true))
 	music_style = str(data.get("music_style", "radio"))
+	legends = int(data.get("legends", 0))
 	best_score = int(data.get("best_score", 0))
 	asked_notify = bool(data.get("asked_notify", false))
 	bartender = str(data.get("bartender", ""))
@@ -144,7 +146,7 @@ func save() -> void:
 		return
 	f.store_string(JSON.stringify({
 		"coins": coins, "unlocked": unlocked, "made": made, "best": best, "shifts": shifts,
-		"birth_year": birth_year, "mocktail": mocktail, "sound": sound, "music": music, "music_style": music_style, "best_score": best_score, "asked_notify": asked_notify, "bartender": bartender,
+		"birth_year": birth_year, "mocktail": mocktail, "sound": sound, "music": music, "music_style": music_style, "legends": legends, "best_score": best_score, "asked_notify": asked_notify, "bartender": bartender,
 		"owned": owned, "tool_skin": tool_skin, "light_theme": light_theme, "boosts": boosts,
 		"review_asked": review_asked, "gift_day": gift_day, "day_streak": day_streak, "challenge_day": challenge_day, "venue": venue, "bars_seen": bars_seen,
 	}))
