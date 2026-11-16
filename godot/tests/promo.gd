@@ -30,12 +30,30 @@ var _alt := 0
 var _serving_to := -1
 var _close: Node3D = null ## the finished glass, for the close-up at the end of a mistake clip
 var _face_gi := 1 ## the guest the "face" shot looks at (their reaction to the drink)
+var _later_vo: Array = [] ## regulars: narration still to come for this drink, said at the shake
 ## whatif: [narration before the drink, ml over the line on every pour, narration after]
+## (the script Shubham approved on 2026-11-16, for a Cosmopolitan, a Margarita and a Daiquiri)
+const WHATIF_INTRO := "What happens if you serve a really bad drink in this bartender game?"
 const WHATIF := [
-	["What happens if you pour WAY too much?", 24.0, "Steam. Out of the ears."],
-	["And if you barely pour anything?", -22.0, "Yeah... that's a no."],
-	["But what if your drink is PERFECT?", 0.0, "The secret Legendary Serve!"],
+	["First guest wants %s. Let's go heavy on the vodka... way past the line. Shake it, strain it, serve it.", 24.0,
+		"Uh oh. Look at that face. Steam, right out of the ears! That's what too strong looks like."],
+	["Next, %s. This time I'll barely pour the tequila. Way under.", -22.0,
+		"Yeah... that's a no. One sip and they're done."],
+	["Now let's do it properly. Right glass, perfect pours, under thirty seconds...", 0.0,
+		"The secret Legendary Serve! Confetti, big tips, and the whole bar cheers."],
 ]
+const WHATIF_END := "Can you unlock it? Bartender: Cocktail Academy. Coming soon on Google Play."
+## regulars: the narrator over each guest (approved 2026-11-16, for a Sidecar then a Spritz)
+## [order line index, narration with the order, narration while making, after line index, narration after]
+const REGULARS_SCRIPT := [
+	[1, "Every bar has these guests. First, the surprise me... who knows exactly what they want.",
+		["So, one %s. Brandy, triple sec, fresh lemon.", "Sugar on the rim, shake it hard, and strain it nice and clean."],
+		1, "Then there's the regular who's always paying next week."],
+	[0, "And this one. Strong, but not too strong. Sure.",
+		["Ice, red bitter, sparkling wine, a splash of soda. Easy."],
+		3, "And the classic. Can it look exactly like the photo?"],
+]
+const REGULARS_END := "Which one is yours? Bartender: Cocktail Academy. Coming soon on Google Play."
 
 ## Camera spots around the bar: [from, to, look at, fov]. The camera drifts from "from" to "to"
 ## over the shot, so nothing is ever a dead still.
@@ -97,9 +115,9 @@ func _ready() -> void:
 		ids = ids.slice(0, 1)
 	if f == "whatif":
 		while ids.size() < 3:
-			ids.append(["daiquiri", "margarita", "cosmopolitan"][ids.size()])
+			ids.append(["cosmopolitan", "margarita", "daiquiri"][ids.size()])
 		ids = ids.slice(0, 3)
-		_vo("What happens if you serve a really bad drink?", 2.6)
+		_vo(WHATIF_INTRO, 3.6)
 		await _secs(2.4)
 	var answer := ""
 	var made := []
@@ -132,17 +150,27 @@ func _ready() -> void:
 				# the secret needs a drink you know by heart: no recipe card, every pour on the line
 				Save.made[d.id] = 5
 				Save.best[d.id] = 3.0
-			_vo(WHATIF[k][0], 2.4)
+			_vo(WHATIF[k][0].replace("%s", _a(d.name)), 2.4)
 			await _secs(0.4)
 		elif f == "guest" or f == "mistake":
 			_cut("guest%d" % gi, 2.6)
 			_say(ORDER_LINES[(k + ids.size()) % ORDER_LINES.size()] % _a(d.name), 2.6)
 			await _secs(2.6)
 		elif f == "regulars":
-			var line: String = REGULAR_ORDERS[(k + randi()) % REGULAR_ORDERS.size()] % _a(d.name)
-			_cut("guest%d" % gi, 3.2)
+			var rs: Array = REGULARS_SCRIPT[k % REGULARS_SCRIPT.size()]
+			var line: String = REGULAR_ORDERS[rs[0]] % _a(d.name)
+			# on the guest's face while they order, so you can see who's talking
+			_face_gi = gi
+			_cut("face", 3.6)
 			_say(line.left(1).to_upper() + line.substr(1), 3.2)
-			await _secs(3.2)
+			_vo(rs[1], 3.4)
+			await _secs(3.6)
+			_pov()
+			# the making narration is spread over the drink: the first part now, the rest when
+			# the shaking starts, so the voice keeps going instead of leaving a long gap
+			var mk: Array = rs[2]
+			_vo(String(mk[0]).replace("%s", d.name), 3.0)
+			_later_vo = mk.slice(1)
 		elif f == "cinematic" and k > 0:
 			_cut("guest%d" % gi, 1.6)
 			await _secs(1.6)
@@ -159,13 +187,20 @@ func _ready() -> void:
 			await _secs(5.0 if k == 2 else 4.4)
 			_pov()
 			if k == 2:
-				_vo("Can you find it? Play free soon.", 2.6, 0.2)
+				_vo(WHATIF_END, 4.0, 0.2)
 			made.append({"id": ids[k], "name": d.name, "method": d.get("method", ""), "home": d.get("home", [])})
 			continue
 		if f == "guest":
 			_say(THANKS[k % THANKS.size()].replace("%s", d.name), 2.0, 0.6)
 		elif f == "regulars":
-			_say(REGULAR_AFTER[(k + randi()) % REGULAR_AFTER.size()], 2.6, 0.6)
+			var rs2: Array = REGULARS_SCRIPT[k % REGULARS_SCRIPT.size()]
+			await _secs(1.4) # the drink lands first
+			_face_gi = gi
+			_cut("face", 3.6)
+			_say(REGULAR_AFTER[rs2[3]], 2.6, 0.3)
+			_vo(rs2[4], 3.0, 0.3)
+			if k == ids.size() - 1:
+				_vo(REGULARS_END, 4.0, 0.2)
 
 		elif f == "learn":
 			_say("Make it at home: full recipe in the caption", 2.6, 0.2)
@@ -213,6 +248,7 @@ func _process(delta: float) -> void:
 	if main == null or pcam == null:
 		return
 	var f: String = opts.format
+	main.quiet_lines = _shot == "face" # a floating line over a close-up face gets cut off
 	_shot_t += delta
 	var cur: Dictionary = main.cur
 	if not cur.is_empty() and cur.i != _last_step and cur.i >= 0 and cur.i < cur.drink.steps.size():
@@ -241,7 +277,7 @@ func _process(delta: float) -> void:
 		# from your side of the bar, close on the guest's face as they taste it
 		var g: Dictionary = main.guests[_face_gi]
 		var hp: Vector3 = main._head_pos(g) + Vector3(0, 0.02, 0)
-		var cp2: Vector3 = hp + Vector3(lerpf(0.34, 0.24, k), -0.08, lerpf(1.15, 0.9, k))
+		var cp2: Vector3 = hp + Vector3(lerpf(0.34, 0.24, k), 0.06, lerpf(1.15, 0.9, k))
 		pcam.global_transform = Transform3D(Basis.looking_at(hp - cp2), cp2)
 		pcam.fov = 50.0
 		pcam.make_current()
@@ -312,6 +348,8 @@ func _on_step(cur: Dictionary) -> void:
 		events.append({"at": _now(), "end": _now() + 6.0, "kind": "step",
 			"text": "Step %d: %s" % [n, Recipes.step_text(s, true)]})
 	_alt += 1
+	if not _later_vo.is_empty() and s.t in ["ice", "shake", "stir"]:
+		_vo(_later_vo.pop_front(), 4.0)
 	match f:
 		"pov":
 			_pov()

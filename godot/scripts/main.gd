@@ -149,7 +149,9 @@ func _ready() -> void:
 # =============================================================== people
 
 func _spawn_people() -> void:
-	var models := ["kate", "david", "megan", "leonard"]
+	# every guest must clearly read as an adult (a drinks game, 18+): the "megan" model looks
+	# too young, so she never sits at the bar. Mia's own model only when you're not playing her.
+	var models := ["kate", "david", "louise" if Save.bartender != "louise" else "josh", "leonard"]
 	for i in Bar.SEATS.size():
 		var x: float = Bar.SEATS[i]
 		var n := People.spawn(models[i], bar)
@@ -1682,10 +1684,10 @@ func _taste_fx(g: Dictionary, kind: String) -> void:
 	Audio.play("bad", -8.0, 0.8)
 	if kind == "steam":
 		for o in [-1.0, 1.0]:
-			_puffs(head + side * 0.1 * o, Color(1, 1, 1, 0.9), 9, 0.02, 0.3, 0.035)
+			_puffs(head + side * 0.1 * o, Color(1, 1, 1, 0.95), 14, 0.03, 0.42, 0.06)
 	else:
 		var fwd := People.local_dir(g.node, Vector3(0, 0, 1))
-		_puffs(head + fwd * 0.13 - Vector3(0, 0.03, 0), Color(0.45, 0.85, 0.3, 0.8), 11, 0.05, 0.16, 0.042)
+		_puffs(head + fwd * 0.13 - Vector3(0, 0.03, 0), Color(0.45, 0.85, 0.3, 0.85), 16, 0.07, 0.22, 0.07)
 
 
 ## The secret legendary serve: a golden glow, confetti over the guest, a cheer.
@@ -1733,6 +1735,8 @@ func _legend_fx(g: Dictionary, first: bool) -> void:
 
 ## A short line floating over a guest's head (what they say when served).
 func _guest_says(g: Dictionary, text: String) -> void:
+	if quiet_lines:
+		return
 	var l := Label3D.new()
 	l.text = text
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -1848,11 +1852,15 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 	if targets.has("Right") and gl != null and react != "":
 		People.reach(s, "Right", targets["Right"], Vector3(0.5, -1, -0.4))
 		People.grip(s, "Right", 0.55)
+		# the glass goes where the hand actually got to, so it's always held, never floating
+		# beside a hand that couldn't quite reach
+		gl.global_position = People.world_pos(s, "RightHand") - Vector3(0.02, 0.06, -0.045)
 	People.look_at_point(n, g.look, g.look_amt)
 
 
 ## Who can come in and sit at the bar.
-const GUEST_MODELS := ["kate", "david", "megan", "leonard", "louise"]
+var quiet_lines := false ## promo clips: no floating guest lines (the close-ups would cut them off)
+const GUEST_MODELS := ["kate", "david", "leonard", "louise", "josh"]
 const WALK_SPEED := 1.05
 var guests_leave := true ## tests that need the same four guests switch this off
 
@@ -1900,6 +1908,7 @@ func _animate_walk(g: Dictionary, delta: float) -> void:
 			if t >= g.get("wait", 3.0) and in_shift:
 				var models := GUEST_MODELS.duplicate()
 				models.erase(g.get("model", ""))
+				models.erase(Save.bartender) # never a twin of your own bartender
 				var m: String = models[randi() % models.size()]
 				var nn := People.spawn(m, bar)
 				nn.set_meta("model", m)

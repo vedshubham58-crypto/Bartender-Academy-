@@ -215,10 +215,11 @@ def to_vertical(avi, mp4, work, fmt, opener, d1, cta, seconds, events, music, vo
     # narration: each line where it happens in the cut, never two at once
     spoken = speak([e["text"] for e in vo], work, voice, speaker) if vo else None
     end_start = sum(x[1] for x in segs)
+    op_len = 0.0 if fmt == "regulars" else 2.2 # the hook segment before the body
     placed = []
     t_free = 0.0
     for k, e in enumerate(vo):
-        t = e["at"] if e["at"] < 0.6 else (2.2 + (e["at"] - 0.6) / speed if e["at"] < body_end
+        t = e["at"] if e["at"] < 0.6 else (op_len + (e["at"] - 0.6) / speed if e["at"] < body_end
                                            else end_start + (e["at"] - body_end))
         t = max(t, t_free)
         secs = spoken[k][1] if spoken else max(1.6, 0.36 * len(e["text"].split()))
@@ -231,7 +232,9 @@ def to_vertical(avi, mp4, work, fmt, opener, d1, cta, seconds, events, music, vo
     parts = []
     for i, (start, length, sp, zoom, lines) in enumerate(segs):
         gw, gh = int(1080 * zoom) // 2 * 2, int(608 * zoom) // 2 * 2
-        cut = f"trim=start={start:.2f}:duration={length * sp:.2f},setpts=(PTS-STARTPTS)/{sp}"
+        # the recording can end before the narration does: hold the last frame instead of cutting
+        cut = (f"tpad=stop_mode=clone:stop_duration=20,trim=start={start:.2f}:duration={length * sp:.2f},"
+               f"setpts=(PTS-STARTPTS)/{sp}")
         vf = (f"[0:v]{cut},split=2[a][b];"
               f"[a]scale=3410:1920,crop=1080:1920,boxblur=30:3,eq=brightness=-0.22:saturation=1.2[bg];"
               f"[b]scale={gw}:{gh},crop=1080:{min(gh, 1000)}[fg];"
@@ -253,7 +256,10 @@ def to_vertical(avi, mp4, work, fmt, opener, d1, cta, seconds, events, music, vo
         for ch in chunks:
             d = secs * len(ch) / len(words)
             word = " ".join(ch).upper()
-            caps.append(text(word, fit(word, 84), "white", 1520, BIG, f":enable='between(t,{at:.2f},{at + d:.2f})'"))
+            # regulars keep the guests' own lines under the picture, so the narration goes on top
+            # (and on the end card, whose own lines sit at the bottom)
+            caps.append(text(word, fit(word, 84), "white", 430 if say or at >= end_start else 1520, BIG,
+                             f":enable='between(t,{at:.2f},{at + d:.2f})'"))
             at += d
     inputs = ["-f", "concat", "-safe", "0", "-i", lst, "-ss", "8", "-i", music]
     music_vol = "1.0"
@@ -373,7 +379,7 @@ def main():
         title = rnd.choice(TITLES[fmt]).format(**fill)[:100]
         tags = HASHTAGS[:4] + rnd.sample(HASHTAGS[4:-1], 4) + ["#drinkresponsibly"]
         caption = rnd.choice(CAPTIONS[fmt]).format(**fill) + "\n\n18+ only. Drink responsibly.\n\n" + " ".join(tags)
-        if fmt == "whatif" and a.voice:
+        if a.voice and any(e.get("kind") == "vo" for e in s.get("events", [])):
             caption += "\n\nVoice: Piper TTS, LibriTTS voice (CC BY 4.0)"
         with open(name + ".json", "w") as f:
             json.dump({"app": "Bartender: Cocktail Academy", "format": fmt, "title": title, "caption": caption,
