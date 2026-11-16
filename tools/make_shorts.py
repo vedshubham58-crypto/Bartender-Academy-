@@ -179,8 +179,10 @@ def to_vertical(avi, mp4, work, fmt, opener, d1, cta, seconds, events, music, vo
     body_end = shot if fmt == "mistake" else max(seconds - 3.0, 1.0)
     segs = []  # (start, length in output seconds, speed, zoom, [text filters])
     w1, w2 = opener
-    segs.append((shot, 2.2, 1.0, 1.9, [text(w1, fit(w1, 82), "white", 200), text(w2, fit(w2, 92), GOLD, 300),
-                                       text(TEASE.get(fmt, "Watch closely"), 58, "white", 1580, SMALL)]))
+    # regulars open straight on the guest's line: the joke is the hook
+    if fmt != "regulars":
+        segs.append((shot, 2.2, 1.0, 1.9, [text(w1, fit(w1, 82), "white", 200), text(w2, fit(w2, 92), GOLD, 300),
+                                           text(TEASE.get(fmt, "Watch closely"), 58, "white", 1580, SMALL)]))
     if fmt == "mistake":
         top, sub = f"1 MISTAKE IN THIS {d1.upper()}", "Can you find it?"
     elif learn:
