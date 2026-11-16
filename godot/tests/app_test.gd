@@ -5,6 +5,8 @@ extends Node
 var main: Node
 var out := "/tmp/shots/a"
 var fails := 0
+var pour_extra := 0.0 ## ml over (or under) the line each pour stops at: a sloppy bartender
+var wrong := {} ## step type -> the wrong choice to make (e.g. {"garnish": "olive"})
 
 
 func _ready() -> void:
@@ -96,7 +98,7 @@ func make(gi: int, shots: bool) -> void:
 				if shots and s.t == "glass":
 					await _secs(0.5)
 					await shot(id + "_glass")
-				await main._choose(s.t, s.v)
+				await main._choose(s.t, wrong.get(s.t, s.v))
 			"pour", "top", "dash", "layer":
 				await _secs(0.5)
 				var src: String = main.expect_src
@@ -125,7 +127,7 @@ func make(gi: int, shots: bool) -> void:
 						await get_tree().process_frame
 					await _frames(4) # let the hands settle before any screenshot
 					# slow test frames run the real-time pour past the line, so stop where a good player would
-					main.pour_ml = main.pour_target + randf_range(-1.5, 1.5)
+					main.pour_ml = main.pour_target + pour_extra + randf_range(-1.5, 1.5)
 					main._pour_t0 = Time.get_ticks_msec() - int(main.pour_ml / (main.TOP_RATE if s.t == "top" else main.POUR_RATE) * 1000.0)
 					if shots:
 						await shot("%s_%d_pour" % [id, i])

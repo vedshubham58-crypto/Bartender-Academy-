@@ -1066,6 +1066,7 @@ func _choose(kind: String, value: String) -> void:
 	var names := {"glass": Recipes.GLASSES, "rim": Recipes.RIMS, "ice": Recipes.ICE, "garnish": Recipes.GARNISH}
 	if value != right:
 		cur.mistakes += 1
+		cur.why = kind
 		Audio.play("bad", -4.0)
 		var rn = names[kind][right]
 		show_toast("%s needs: %s" % [Recipes.drink_name(cur.drink), rn.name if rn is Dictionary else rn], C_RED, 40)
@@ -1378,6 +1379,8 @@ func _pour_release() -> void:
 	if cur.step.t == "top":
 		err = clampf(err, -15.0, 15.0) * 0.5
 	cur.errs.append(err)
+	if absf(err) > 12.0:
+		cur.why = "strong" if err > 0.0 else "weak"
 	if Recipes.is_perfect(err):
 		cur.perfect += 1
 		Audio.play("good", -6.0)
@@ -1548,6 +1551,14 @@ func _serve() -> void:
 		badges.append("JUST HOW THEY LIKE IT")
 		tip += 10
 		score += 40
+	# the secret: a flawless drink, every pour perfect, fast and from memory
+	var legend: bool = stars >= 3.0 and cur.perfect > 0 and cur.perfect == cur.errs.size() \
+			and secs < 30.0 and not _hint_on()
+	if legend:
+		badges.push_front("LEGENDARY SERVE")
+		tip += 50
+		score += 200
+		Save.legends += 1
 	if boost.has("tips"):
 		tip = int(round(tip * 1.5))
 	Save.coins += tip
@@ -1584,10 +1595,23 @@ func _serve() -> void:
 		var cap: float = Recipes.GLASSES[gl.get_meta("kind")].ml
 		g.fill = _fill_look(cur.vol / cap)
 		g.color = cur.color
-		g.react = "cheer" if stars >= 2.5 else ("sip" if stars >= 1.5 else "meh")
+		g.react = "cheer" if stars >= 2.5 else ("sip" if stars >= 1.5 else "yuck")
 		g.react_t = 0.0
 		g.sip_next = 3.2
-		get_tree().create_timer(0.7).timeout.connect(_guest_says.bind(g, _reaction_line(stars, d)))
+		var why: String = cur.get("why", "")
+		# funny reactions: a guest tastes a bad drink straight away and pulls a face
+		g.fx = ""
+		if legend:
+			g.react = "legend"
+			g.fx = "legend"
+		elif stars < 2.5 and why != "":
+			g.sip_next = 0.6
+			g.fx = "steam" if why == "strong" else "yuck"
+		g.fx_done = false
+		var said := _reaction_line(stars, d, why if stars < 2.5 else "", legend)
+		get_tree().create_timer(0.7 if g.fx == "" or legend else 2.4).timeout.connect(_guest_says.bind(g, said))
+		if legend:
+			get_tree().create_timer(0.75).timeout.connect(_legend_fx.bind(g, Save.legends == 1))
 	_end_drink(true)
 
 
@@ -1596,12 +1620,113 @@ func _serve() -> void:
 const LINES_GREAT := ["Wow, perfect!", "Best %s ever!", "Now that's a %s!", "You're a pro!", "Cheers to you!"]
 const LINES_GOOD := ["Nice, thanks!", "Mmm, good!", "Thank you!", "Lovely."]
 const LINES_MEH := ["Hmm... okay.", "Not quite right.", "Bit off, but thanks."]
+## What a guest says when something specific went wrong (shown after they taste it).
+const LINES_WHY := {
+	"strong": ["Whoa! My ears are steaming!", "That's... a LOT. Water, please!", "I can see sounds now.", "Did you pour the whole bottle?"],
+	"weak": ["Is this... just ice?", "I think the bottle was shy.", "Tastes like a rumour of a cocktail.", "Did you forget something?"],
+	"glass": ["Interesting glass choice...", "Why is my %s in THAT?", "Is this glass a joke?"],
+	"rim": ["What is on this rim?!", "That rim is a crime.", "The rim! THE RIM!"],
+	"ice": ["The ice is all wrong!", "Hmm, this ice is confused.", "Who taught you ice?"],
+	"garnish": ["That garnish? Really?", "The garnish is a mystery.", "Bold garnish. Wrong, but bold."],
+	"mixed": ["The layers had a fight.", "It's meant to have layers...", "Pretty... but where are the layers?"],
+}
+const LINES_LEGEND := ["LEGENDARY!", "This is the best drink of my LIFE!", "Bartender of the year!", "I'm telling everyone about you!"]
 
 
-func _reaction_line(stars: float, d: Dictionary) -> String:
+func _reaction_line(stars: float, d: Dictionary, why := "", legend := false) -> String:
 	var pool: Array = LINES_GREAT if stars >= 2.5 else (LINES_GOOD if stars >= 1.5 else LINES_MEH)
+	if legend:
+		pool = LINES_LEGEND
+	elif LINES_WHY.has(why):
+		pool = LINES_WHY[why]
 	var l: String = pool[randi() % pool.size()]
 	return l % Recipes.drink_name(d) if "%s" in l else l
+
+
+## A few soft blobs rising from a point and fading (steam from the ears, a green "yuck" puff).
+func _puffs(at: Vector3, col: Color, count: int, spread: float, rise: float, size: float) -> void:
+	for i in count:
+		var m := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = size
+		sm.height = size * 2.0
+		sm.radial_segments = 10
+		sm.rings = 6
+		m.mesh = sm
+		var mt := StandardMaterial3D.new()
+		mt.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mt.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mt.albedo_color = col
+		m.material_override = mt
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		bar.add_child(m)
+		var off := Vector3(randf_range(-spread, spread), randf_range(-0.02, 0.02), randf_range(-spread, spread))
+		m.global_position = at + off
+		m.scale = Vector3.ONE * 0.4
+		var tw := create_tween().set_parallel(true)
+		var delay := i * 0.07
+		tw.tween_property(m, "global_position", at + off * 2.0 + Vector3(0, rise, 0), 1.3).set_delay(delay).set_ease(Tween.EASE_OUT)
+		tw.tween_property(m, "scale", Vector3.ONE * 1.5, 1.3).set_delay(delay)
+		tw.tween_property(mt, "albedo_color:a", 0.0, 0.8).set_delay(delay + 0.5)
+		tw.chain().tween_callback(m.queue_free)
+
+
+## A guest tasting a bad drink: steam out of both ears (too strong) or a green puff (yuck).
+func _taste_fx(g: Dictionary, kind: String) -> void:
+	if not is_instance_valid(g.node):
+		return
+	var head := _head_pos(g) + Vector3(0, -0.17, 0)
+	var side := People.local_dir(g.node, Vector3(1, 0, 0))
+	Audio.play("bad", -8.0, 0.8)
+	if kind == "steam":
+		for o in [-1.0, 1.0]:
+			_puffs(head + side * 0.1 * o, Color(1, 1, 1, 0.9), 9, 0.02, 0.3, 0.035)
+	else:
+		var fwd := People.local_dir(g.node, Vector3(0, 0, 1))
+		_puffs(head + fwd * 0.13 - Vector3(0, 0.03, 0), Color(0.45, 0.85, 0.3, 0.8), 11, 0.05, 0.16, 0.042)
+
+
+## The secret legendary serve: a golden glow, confetti over the guest, a cheer.
+func _legend_fx(g: Dictionary, first: bool) -> void:
+	if not is_instance_valid(g.node):
+		return
+	var head := _head_pos(g)
+	Audio.play("good", 0.0, 1.2)
+	Audio.play("tip", -2.0, 0.8)
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(1.0, 0.82, 0.35)
+	glow.omni_range = 1.6
+	glow.light_energy = 0.0
+	bar.add_child(glow)
+	glow.global_position = head + Vector3(0, 0.3, 0.3)
+	var tw := create_tween()
+	tw.tween_property(glow, "light_energy", 4.0, 0.4)
+	tw.tween_interval(1.8)
+	tw.tween_property(glow, "light_energy", 0.0, 1.0)
+	tw.tween_callback(glow.queue_free)
+	var cols := [Color(1, 0.8, 0.2), Color(1, 0.35, 0.45), Color(0.3, 0.8, 1), Color(0.5, 1, 0.5), Color(1, 1, 1)]
+	for i in 40:
+		var m := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.018, 0.002, 0.012)
+		m.mesh = bm
+		var mt := StandardMaterial3D.new()
+		mt.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mt.albedo_color = cols[i % cols.size()]
+		m.material_override = mt
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		bar.add_child(m)
+		var start := head + Vector3(randf_range(-0.45, 0.45), randf_range(0.35, 0.7), randf_range(-0.25, 0.3))
+		m.global_position = start
+		m.rotation = Vector3(randf() * TAU, randf() * TAU, 0)
+		var ct := create_tween().set_parallel(true)
+		var t := randf_range(1.6, 2.6)
+		ct.tween_property(m, "global_position", start + Vector3(randf_range(-0.2, 0.2), -1.1, 0), t).set_ease(Tween.EASE_IN)
+		ct.tween_property(m, "rotation", m.rotation + Vector3(randf_range(4, 9), randf_range(4, 9), 0), t)
+		ct.chain().tween_callback(m.queue_free)
+	if first:
+		get_tree().create_timer(2.6).timeout.connect(func():
+			show_toast("SECRET FOUND: the Legendary Serve!\nEvery pour perfect, fast and from memory.", C_GOLD, 40))
 
 
 ## A short line floating over a guest's head (what they say when served).
@@ -1668,7 +1793,9 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 		var mouth := head + fwd * 0.12 + Vector3(0, -0.2, 0)
 		var want := rest
 		var tilt := 0.0
-		if react == "cheer" and g.react_t < 2.2:
+		if react == "legend" and g.react_t < 3.2:
+			want = rest # glass stays on the bar while both arms go up
+		elif react == "cheer" and g.react_t < 2.2:
 			# raise the glass: "cheers!"
 			var up: float = sin(clampf(g.react_t / 2.2, 0.0, 1.0) * PI)
 			want = rest.lerp(head + fwd * 0.3 + Vector3(0.05, 0.12, 0), up)
@@ -1690,11 +1817,32 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 		gl.rotation.x = tilt
 		# right hand around the glass, on the guest's side of it
 		targets["Right"] = want + Vector3(0.02, 0.06, -0.045)
+		# after the first taste of a bad drink: shake the head, pull a face, steam or a green puff
+		var fx: String = g.get("fx", "")
+		if fx == "yuck" or fx == "steam":
+			var after: float = g.react_t - 2.4
+			if after > 0.0 and not g.fx_done:
+				g.fx_done = true
+				_taste_fx(g, fx)
+			if after > 0.0 and after < 1.4:
+				var right := fwd.cross(Vector3.UP)
+				g.look = head + fwd * 2.0 + right * sin(after * 22.0) * 1.2 + Vector3(0, -0.4, 0)
+				g.look_amt = 1.0
+				g.sip_next = maxf(g.sip_next, 3.0)
 	elif not g.order.is_empty() and g.patience < 40.0:
 		# impatient: drum the fingers on the bar
 		var tap: float = absf(sin(t * 11.0)) * 0.035 * (1.0 if fmod(t, 3.0) < 1.6 else 0.0)
 		targets["Right"] = Vector3(g.x - 0.05, Bar.BT + 0.035 + tap, Bar.BZ1 + 0.24)
 	People.arms_on_bar(n, Bar.BT, Bar.BZ1, g.x, targets)
+	if react == "legend" and g.get("react_t", 9.0) < 3.2:
+		# both arms up, waving: the best drink of their life
+		var w: float = sin(float(g.react_t) * 9.0) * 0.35
+		People.aim(s, "LeftArm", "LeftForeArm", People.local_dir(n, Vector3(.35 + w, 1, .2)))
+		People.aim(s, "RightArm", "RightForeArm", People.local_dir(n, Vector3(-.35 + w, 1, .2)))
+		People.aim(s, "LeftForeArm", "LeftHand", People.local_dir(n, Vector3(.1 + w, 1, 0)))
+		People.aim(s, "RightForeArm", "RightHand", People.local_dir(n, Vector3(-.1 + w, 1, 0)))
+		People.look_at_point(n, cam.global_position, 0.9)
+		return
 	if targets.has("Right") and gl != null and react != "":
 		People.reach(s, "Right", targets["Right"], Vector3(0.5, -1, -0.4))
 		People.grip(s, "Right", 0.55)
@@ -2658,6 +2806,7 @@ func _float_tick(delta: float) -> void:
 	if f.flow > FLOAT_HI + 0.08 and not f.broke:
 		f.broke = true
 		cur.mistakes += 1
+		cur.why = "mixed"
 		Audio.play("bad", -6.0)
 		show_toast("Too fast, it mixed in!", C_RED, 44)
 		bar.set_layer(glass_node, 0.0, 0.0, Color.WHITE)
