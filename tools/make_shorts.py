@@ -264,11 +264,13 @@ def to_vertical(avi, mp4, work, fmt, opener, d1, cta, seconds, events, music, vo
             inputs += ["-i", path]
             ms = int(placed[k][0] * 1000)
             mix += f"[{k + 2}:a]adelay={ms}|{ms},volume=1.6[v{k}];"
-        mix += "".join(f"[v{k}]" for k in range(len(spoken)))
+        # the music bed goes first: amix's duration=first follows the first input, so a voice
+        # line first would cut the whole soundtrack off when that line ends
+        mix += "[m]" + "".join(f"[v{k}]" for k in range(len(spoken)))
     afilter = (f"[1:a]atrim=duration={total:.2f},volume={music_vol},afade=t=in:d=0.2,"
                f"afade=t=out:st={total - 1.2:.2f}:d=1.2[m];")
     if spoken:
-        afilter += mix + f"[m]amix=inputs={len(spoken) + 1}:duration=first:normalize=0[mx];[mx]"
+        afilter += mix + f"amix=inputs={len(spoken) + 1}:duration=first:normalize=0[mx];[mx]"
     else:
         afilter += "[m]"
     afilter += "loudnorm=I=-14:TP=-1.5[a]"
