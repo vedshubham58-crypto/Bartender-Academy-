@@ -799,10 +799,11 @@ func show_book() -> void:
 		for s in d.steps:
 			txt += "%d. %s\n" % [k, Recipes.step_text(s, true)]
 			k += 1
-		txt += "\n[b]Make it for real (at home)[/b]\n"
-		for h in d.home:
-			txt += "• %s\n" % h
+		# the at-home recipes are the alcoholic originals: never shown in mocktail mode
 		if not Save.mocktail:
+			txt += "\n[b]Make it for real (at home)[/b]\n"
+			for h in d.home:
+				txt += "• %s\n" % h
 			txt += "\n[b]Mocktail twin:[/b] %s — swap the spirits for juices in mocktail mode." % d.mocktail
 		rt.text = txt
 		rt.scroll_active = false
@@ -1016,7 +1017,7 @@ func _next_step() -> void:
 		"pour", "top", "dash", "layer":
 			_set_view("station")
 			expecting = "pick"
-			expect_src = Recipes.src(s.src)
+			expect_src = Recipes.step_src(s)
 			var where := "speed rail" if Recipes.SOURCES[expect_src].kind == "rail" else "station"
 			hint_label.text = "Tap the glowing %s in the %s" % [Recipes.SOURCES[expect_src].name, where]
 			_show_pointer(bar.pickables[expect_src], Recipes.SOURCES[expect_src].name)
@@ -1505,7 +1506,9 @@ func _strain() -> void:
 	tw.parallel().tween_property(tin_node, "position", Bar.TIN_SPOT, 0.18)
 	tw.tween_callback(func():
 		_straining = false
-		if glass_node.get_meta("kind") == "rocks":
+		# sours on the rocks and a Tom Collins go over fresh ice; a Gin Fizz is served without
+		var kind: String = glass_node.get_meta("kind")
+		if kind == "rocks" or (kind == "highball" and cur.drink.id != "gin_fizz"):
 			_put_ice(glass_node, "cubes")
 		_next_step())
 
@@ -2583,7 +2586,18 @@ func _update_hands(delta: float) -> void:
 	# shoulders and arms never sink into the ice
 	me.node.visible = in_shift and not hide_me and expecting != "pick" and _view != "station" and cam.global_position.z < -0.1 and cam.global_transform.basis.z.y < 0.6
 	if host:
-		host.visible = not in_shift and not _picking
+		# promo outside shots: your bartender stands behind the bar facing the guests, so
+		# they never vanish from the frame once the drink is served
+		var outside := in_shift and hide_me
+		host.visible = (not in_shift or outside) and not _picking
+		if outside != bool(host.get_meta("outside", false)):
+			host.set_meta("outside", outside)
+			if outside:
+				host.set_meta("menu_xf", host.transform)
+				host.rotation.y = PI
+				People.place_standing(host, 0.05, 0.05)
+			else:
+				host.transform = host.get_meta("menu_xf")
 	if in_shift and not cur.is_empty():
 		if _carry:
 			held = _carry

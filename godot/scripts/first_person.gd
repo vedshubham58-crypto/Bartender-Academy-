@@ -105,7 +105,9 @@ func update(cam: Camera3D, dt: float) -> void:
 		var t: Vector3 = target[side]
 		if t == Vector3.INF:
 			t = _rest(side, cam, fwd, right)
-		_cur[side] = t if not _started else _cur[side].lerp(t, k)
+		# an empty hand drops out of view quickly instead of hanging in front of the bar
+		var kk := k if target[side] != Vector3.INF else 1.0 - exp(-minf(dt, 0.05) * 22.0)
+		_cur[side] = t if not _started else _cur[side].lerp(t, kk)
 		_grip[side] = lerpf(_grip[side], grip[side], k)
 		var o := 1.0 if side == "Right" else -1.0
 		# elbow kept low and tucked, so the forearm points into the scene, not across it

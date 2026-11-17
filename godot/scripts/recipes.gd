@@ -133,7 +133,7 @@ const DRINKS := [
 		"id": "mojito", "name": "Mojito", "price": 45, "glass": "highball", "method": "Muddle & build",
 		"about": "Press the mint gently to release its oil. Crushed ice and a soda top make it long and fresh.",
 		"steps": [
-			{"t": "glass", "v": "highball"}, {"t": "muddle"}, {"t": "pour", "src": "white_rum", "ml": 50},
+			{"t": "glass", "v": "highball"}, {"t": "muddle"}, {"t": "pour", "src": "white_rum", "ml": 50, "mock_src": "soda"},
 			{"t": "pour", "src": "lime", "ml": 25}, {"t": "pour", "src": "sugar", "ml": 15}, {"t": "ice", "v": "crushed"},
 			{"t": "top", "src": "soda"}, {"t": "garnish", "v": "mint_sprig"},
 		],
@@ -471,7 +471,7 @@ const DRINKS := [
 		"id": "pina_colada", "name": "Piña Colada", "price": 55, "glass": "highball", "method": "Blend",
 		"about": "Rum, coconut and pineapple. Creamy, sweet and tropical.",
 		"steps": [
-			{"t": "glass", "v": "highball"}, {"t": "pour", "src": "white_rum", "ml": 50}, {"t": "pour", "src": "coconut_cream", "ml": 30},
+			{"t": "glass", "v": "highball"}, {"t": "pour", "src": "white_rum", "ml": 50, "mock_src": "pineapple_juice"}, {"t": "pour", "src": "coconut_cream", "ml": 30},
 			{"t": "pour", "src": "pineapple_juice", "ml": 90}, {"t": "ice", "v": "crushed"}, {"t": "blend"},
 			{"t": "garnish", "v": "pineapple_wedge"},
 		],
@@ -558,6 +558,14 @@ func src(id: String) -> String:
 	return id
 
 
+## The bottle a step pours. A step can name its own mocktail swap ("mock_src") when the
+## general one is wrong for that drink: a Virgin Mojito is mint, lime, sugar and soda.
+func step_src(s: Dictionary) -> String:
+	if Save.mocktail and s.has("mock_src"):
+		return s.mock_src
+	return src(s.src)
+
+
 func src_name(id: String) -> String:
 	var s: Dictionary = SOURCES[src(id)]
 	return s.name
@@ -586,11 +594,11 @@ func step_text(s: Dictionary, hint := true) -> String:
 		"muddle":
 			return "Muddle mint + lime"
 		"pour":
-			return ("%s · %d ml" % [src_name(s.src), s.ml]) if hint else ("%s · ? ml" % src_name(s.src))
+			return ("%s · %d ml" % [SOURCES[step_src(s)].name, s.ml]) if hint else ("%s · ? ml" % SOURCES[step_src(s)].name)
 		"dash":
-			return "%s · %d dashes" % [src_name(s.src), s.n]
+			return "%s · %d dashes" % [SOURCES[step_src(s)].name, s.n]
 		"top":
-			return "Top with %s" % src_name(s.src)
+			return "Top with %s" % SOURCES[step_src(s)].name
 		"ice":
 			return ("Ice: %s" % ICE[s.v].to_lower()) if hint else "Add ice"
 		"shake":
@@ -603,7 +611,7 @@ func step_text(s: Dictionary, hint := true) -> String:
 			return GARNISH[s.v] if hint else "Garnish"
 		"layer":
 			var how := "Sink" if s.get("sink", false) else "Float"
-			return ("%s %s · %d ml" % [how, src_name(s.src), s.ml]) if hint else ("%s %s · ? ml" % [how, src_name(s.src)])
+			return ("%s %s · %d ml" % [how, SOURCES[step_src(s)].name, s.ml]) if hint else ("%s %s · ? ml" % [how, SOURCES[step_src(s)].name])
 		"blend":
 			return "Blend until smooth"
 		"flame":
