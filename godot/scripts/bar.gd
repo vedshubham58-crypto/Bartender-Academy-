@@ -27,8 +27,8 @@ const ICE_SPOT := Vector3(0.0, TOP, -0.55)
 const VENUES := {
 	"rooftop": {"name": "Rooftop Bar", "unlock": 0, "about": "A terrace high above the city lights."},
 	"beach": {"name": "Beach Shack", "unlock": 3, "about": "Bamboo, sand and a sunset over the sea."},
-	"hotel": {"name": "Grand Hotel Lounge", "unlock": 8, "about": "Marble, chandeliers and a grand piano."},
-	"speakeasy": {"name": "The Hidden Door", "unlock": 15, "about": "A secret bar behind a bookcase."},
+	"hotel": {"name": "Grand Hotel Lounge", "unlock": 12, "about": "Marble, chandeliers and a grand piano."},
+	"speakeasy": {"name": "The Hidden Door", "unlock": 25, "about": "A secret bar behind a bookcase."},
 }
 var venue := "rooftop"
 var pickables := {}
