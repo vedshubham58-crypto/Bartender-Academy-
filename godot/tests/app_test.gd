@@ -120,6 +120,9 @@ func make(gi: int, shots: bool) -> void:
 					for n in s.n:
 						main._dash()
 				else:
+					# like a player: hold to pour once the camera is over the jigger and the hand
+					# is on the bottle, not while it is still swinging up from the speed rail
+					await _secs(0.5)
 					main._pour_t0 = Time.get_ticks_msec()
 					main.pouring = true
 					main.stream.visible = true

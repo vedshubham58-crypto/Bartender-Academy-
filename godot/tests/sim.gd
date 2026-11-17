@@ -45,7 +45,7 @@ func _initialize() -> void:
 					"garnish":
 						check(R.GARNISH.has(s.v), "%s garnish %s exists" % [d.id, s.v])
 					"pour", "top", "dash", "layer":
-						var src: String = R.src(s.src)
+						var src: String = R.step_src(s)
 						check(R.SOURCES.has(src), "%s source %s exists (mocktail=%s)" % [d.id, src, mock])
 						if R.SOURCES.has(src) and R.SOURCES[src].kind == "rail":
 							check(src in rail, "%s: %s is on the speed rail (mocktail=%s)" % [d.id, src, mock])
@@ -59,7 +59,7 @@ func _initialize() -> void:
 			if mock:
 				for s in d.steps:
 					if s.has("src"):
-						var src2: String = R.src(s.src)
+						var src2: String = R.step_src(s)
 						check(not R.MOCKTAIL_SWAP.has(src2), "%s mocktail has no alcohol (%s)" % [d.id, src2])
 	S.mocktail = false
 	for id in R.rail():

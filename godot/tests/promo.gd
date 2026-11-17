@@ -63,8 +63,9 @@ const SHOTS := {
 	"side_l": [Vector3(-2.0, 1.48, -1.15), Vector3(-1.7, 1.4, -1.05), Vector3(0.1, 1.22, -0.85), 42.0],
 	"top": [Vector3(-0.05, 1.8, -1.3), Vector3(-0.05, 1.68, -1.22), Vector3(0.0, 1.12, -0.89), 40.0],
 	"low": [Vector3(-0.8, 1.27, -1.22), Vector3(-0.7, 1.26, -1.15), Vector3(0.0, 1.18, -0.88), 36.0],
-	"guest1": [Vector3(-0.15, 1.58, -2.15), Vector3(-0.12, 1.54, -2.0), Vector3(0.05, 1.35, 0.0), 48.0],
-	"guest2": [Vector3(0.75, 1.58, -2.15), Vector3(0.72, 1.54, -2.0), Vector3(-0.05, 1.35, 0.0), 48.0],
+	# over the guest's head (not through it), so their raised glass never covers the bartender
+	"guest1": [Vector3(-0.15, 1.92, -2.15), Vector3(-0.12, 1.88, -2.0), Vector3(0.05, 1.3, 0.0), 48.0],
+	"guest2": [Vector3(0.75, 1.92, -2.15), Vector3(0.72, 1.88, -2.0), Vector3(-0.05, 1.3, 0.0), 48.0],
 	"slide1": [Vector3(-1.95, 1.3, -1.0), Vector3(-1.8, 1.28, -1.02), Vector3(-0.45, 1.15, -1.15), 38.0],
 	"slide2": [Vector3(1.95, 1.3, -1.0), Vector3(1.8, 1.28, -1.02), Vector3(0.45, 1.15, -1.15), 38.0],
 }
@@ -248,7 +249,7 @@ func _process(delta: float) -> void:
 	if main == null or pcam == null:
 		return
 	var f: String = opts.format
-	main.quiet_lines = _shot == "face" # a floating line over a close-up face gets cut off
+	main.quiet_lines = _shot != "" # a floating line over a close-up gets cut off at the edges
 	# your own body is posed for your eyes only: seen from a guest's seat its arms float and
 	# twist round the station, so outside shots leave it out
 	main.hide_me = _shot != ""
@@ -365,11 +366,9 @@ func _on_step(cur: Dictionary) -> void:
 			else:
 				_pov()
 		"guest", "regulars":
-			# mostly your own view, one outside angle for the showy steps
-			if s.t in ["shake", "muddle", "blend"]:
-				_cut("side" if _alt % 2 == 0 else "side_l", 3.0)
-			else:
-				_pov()
+			# your own view all the way through the making: from outside there is no bartender
+			# body that really shakes or muddles, so an outside angle would show idle hands
+			_pov()
 		"learn":
 			# close on the glass so every step is easy to see
 			if s.t in ["layer", "flame"]:
