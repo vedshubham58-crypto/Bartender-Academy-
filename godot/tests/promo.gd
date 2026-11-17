@@ -64,8 +64,8 @@ const SHOTS := {
 	"top": [Vector3(-0.05, 1.8, -1.3), Vector3(-0.05, 1.68, -1.22), Vector3(0.0, 1.12, -0.89), 40.0],
 	"low": [Vector3(-0.8, 1.27, -1.22), Vector3(-0.7, 1.26, -1.15), Vector3(0.0, 1.18, -0.88), 36.0],
 	# over the guest's head (not through it), so their raised glass never covers the bartender
-	"guest1": [Vector3(-0.15, 1.92, -2.15), Vector3(-0.12, 1.88, -2.0), Vector3(0.05, 1.3, 0.0), 48.0],
-	"guest2": [Vector3(0.75, 1.92, -2.15), Vector3(0.72, 1.88, -2.0), Vector3(-0.05, 1.3, 0.0), 48.0],
+	"guest1": [Vector3(-0.15, 2.08, -2.15), Vector3(-0.12, 2.04, -2.0), Vector3(0.05, 1.25, 0.0), 48.0],
+	"guest2": [Vector3(0.75, 2.08, -2.15), Vector3(0.72, 2.04, -2.0), Vector3(-0.05, 1.25, 0.0), 48.0],
 	"slide1": [Vector3(-1.95, 1.3, -1.0), Vector3(-1.8, 1.28, -1.02), Vector3(-0.45, 1.15, -1.15), 38.0],
 	"slide2": [Vector3(1.95, 1.3, -1.0), Vector3(1.8, 1.28, -1.02), Vector3(0.45, 1.15, -1.15), 38.0],
 }

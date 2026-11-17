@@ -258,8 +258,11 @@ def to_vertical(avi, mp4, work, fmt, opener, d1, cta, seconds, events, music, vo
             word = " ".join(ch).upper()
             # regulars keep the guests' own lines under the picture, so the narration goes on top
             # (and on the end card, whose own lines sit at the bottom)
-            caps.append(text(word, fit(word, 84), "white", 430 if say or at >= end_start else 1520, BIG,
-                             f":enable='between(t,{at:.2f},{at + d:.2f})'"))
+            # a chunk that runs into the end card jumps to the top there, so it never sits on
+            # the end card's own lines
+            for a, b in ([(at, at + d)] if say or not at < end_start < at + d else [(at, end_start), (end_start, at + d)]):
+                caps.append(text(word, fit(word, 84), "white", 430 if say or a >= end_start else 1520, BIG,
+                                 f":enable='between(t,{a:.2f},{b:.2f})'"))
             at += d
     inputs = ["-f", "concat", "-safe", "0", "-i", lst, "-ss", "8", "-i", music]
     music_vol = "1.0"
