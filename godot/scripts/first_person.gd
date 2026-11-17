@@ -76,6 +76,7 @@ func update(cam: Camera3D, dt: float) -> void:
 	var k := 1.0 - exp(-minf(dt, 0.05) * 12.0)
 	var lean := Vector3.ZERO
 	var low := 0.0 ## how far below the shoulders the work is (0..1): only then do you bend over
+	var dip := 1.0 ## work held up near shoulder height (shaking, pouring): stand tall, don't dip
 	var n := 0
 	for side in ["Right", "Left"]:
 		var t: Vector3 = target[side]
@@ -90,11 +91,13 @@ func update(cam: Camera3D, dt: float) -> void:
 		if need > 0.0 and to.length() > 0.001:
 			lean += to.normalized() * need
 		low = maxf(low, clampf((sp.y - t.y - 0.12) / 0.2, 0.0, 1.0))
+		dip = minf(dip, clampf((sp.y - t.y + 0.02) / 0.22, 0.0, 1.0))
 		n += 1
 	if n > 0:
 		lean /= n
-	lean = lean.limit_length(MAX_LEAN)
-	var lv := Vector3(lean.x, -lean.length() * DIP * (0.7 + 0.3 * low), lean.z)
+	# standing tall for high work, the chest can lean further over the bar top
+	lean = lean.limit_length(lerpf(MAX_LEAN + 0.1, MAX_LEAN, dip))
+	var lv := Vector3(lean.x, -lean.length() * DIP * (0.7 + 0.3 * low) * dip, lean.z)
 	_lean = lv if not _started else _lean.lerp(lv, k * 0.6)
 	# dip as you lean in, like bending over the station, so your shoulders stay out of view
 	node.global_position += _lean

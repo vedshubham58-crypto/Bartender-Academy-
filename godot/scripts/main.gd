@@ -9,8 +9,8 @@ const BARTENDERS := {
 	"remy": {"name": "Leo", "about": "Easy smile, quick hands, relaxed style."},
 	"louise": {"name": "Mia", "about": "Sharp, precise, smart navy uniform."},
 }
-const SHAKE_TILT := -0.45 ## the shaker leans so each hand stays on its own side
-const SHAKE_SPOT := Vector3(0.05, 1.17, -0.88) ## the tin is held up here while shaking
+const SHAKE_TILT := -0.3 ## the shaker leans a little so each hand stays on its own side
+const SHAKE_SPOT := Vector3(0.1, 1.17, -0.86) ## the tin is held up here while shaking
 
 const VIEWS := {
 	"bar": [Vector3(0, 1.6, .5), Vector3(0, 1.08, -1.5), 60.0],
@@ -83,6 +83,8 @@ var _serving: Node3D
 var _straining := false
 var _reach_until := 0.0
 var _picking := false
+var _view := "" ## the camera view last asked for
+var hide_me := false ## promo clips: outside camera shots never show your first-person body
 var _previews: Array = []
 var _reach_pos := Vector3.ZERO
 var cam_base := Transform3D() ## where the current view puts the camera; swipes look around from here
@@ -149,7 +151,9 @@ func _ready() -> void:
 # =============================================================== people
 
 func _spawn_people() -> void:
-	var models := ["kate", "david", "megan", "leonard"]
+	# every guest must clearly read as an adult (a drinks game, 18+): the "megan" model looks
+	# too young, so she never sits at the bar. Mia's own model only when you're not playing her.
+	var models := ["kate", "david", "louise" if Save.bartender != "louise" else "josh", "leonard"]
 	for i in Bar.SEATS.size():
 		var x: float = Bar.SEATS[i]
 		var n := People.spawn(models[i], bar)
@@ -202,6 +206,7 @@ func _head_pos(g: Dictionary) -> Vector3:
 # =============================================================== camera
 
 func _set_view(v: String, secs := 0.45) -> void:
+	_view = v
 	var d: Array = VIEWS[v]
 	var target := Transform3D(Basis.looking_at(d[1] - d[0]), d[0])
 	if secs <= 0.0:
@@ -1104,12 +1109,12 @@ func _choose(kind: String, value: String) -> void:
 			# scoop from the ice well, carry it over and tip it in
 			var into: Node3D = tin_node if tin_node else glass_node
 			var scoop := _make_scoop()
-			scoop.position = bar.pickables["ice"] + Vector3(-0.05, 0.02, 0)
+			scoop.position = bar.pickables["ice"] + Vector3(-0.05, 0.07, 0)
 			_carry = scoop
 			var top: float = 0.18 if into == tin_node else _glass_top()
 			var over: Vector3 = into.position + Vector3(0.04, top + 0.08, 0.02)
 			var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			tw.tween_property(scoop, "position:y", scoop.position.y - 0.06, 0.09)
+			tw.tween_property(scoop, "position:y", scoop.position.y - 0.035, 0.09)
 			tw.tween_property(scoop, "position", over, 0.24)
 			tw.tween_property(scoop, "rotation:z", 1.6, 0.11)
 			await tw.finished
@@ -1309,7 +1314,6 @@ func _tap_pick(p: Vector2) -> void:
 	expecting = ""
 	_hide_pointer()
 	pour_src = best
-	_reach(bar.pickables[best], 0.3)
 	var s: Dictionary = cur.step
 	if s.t == "dash":
 		_taps = 0
@@ -1484,7 +1488,9 @@ func _strain() -> void:
 		return
 	_straining = true
 	var tw := create_tween()
-	var over := glass_node.position + Vector3(0.09, _glass_top() + 0.12, 0)
+	# low and just right of the glass, so the hand holding the tin's base can reach it and
+	# the tipped tin's mouth sits right over the rim
+	var over := glass_node.position + Vector3(0.17, _glass_top() + 0.05, 0)
 	tw.tween_property(tin_node, "position", over, 0.21)
 	tw.parallel().tween_property(tin_node, "rotation:z", 1.9, 0.21)
 	Audio.play("pour", -8.0)
@@ -1680,10 +1686,10 @@ func _taste_fx(g: Dictionary, kind: String) -> void:
 	Audio.play("bad", -8.0, 0.8)
 	if kind == "steam":
 		for o in [-1.0, 1.0]:
-			_puffs(head + side * 0.1 * o, Color(1, 1, 1, 0.9), 9, 0.02, 0.3, 0.035)
+			_puffs(head + side * 0.1 * o, Color(1, 1, 1, 0.95), 14, 0.03, 0.42, 0.06)
 	else:
 		var fwd := People.local_dir(g.node, Vector3(0, 0, 1))
-		_puffs(head + fwd * 0.13 - Vector3(0, 0.03, 0), Color(0.45, 0.85, 0.3, 0.8), 11, 0.05, 0.16, 0.042)
+		_puffs(head + fwd * 0.13 - Vector3(0, 0.03, 0), Color(0.45, 0.85, 0.3, 0.85), 16, 0.07, 0.22, 0.07)
 
 
 ## The secret legendary serve: a golden glow, confetti over the guest, a cheer.
@@ -1731,6 +1737,8 @@ func _legend_fx(g: Dictionary, first: bool) -> void:
 
 ## A short line floating over a guest's head (what they say when served).
 func _guest_says(g: Dictionary, text: String) -> void:
+	if quiet_lines:
+		return
 	var l := Label3D.new()
 	l.text = text
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -1846,11 +1854,15 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 	if targets.has("Right") and gl != null and react != "":
 		People.reach(s, "Right", targets["Right"], Vector3(0.5, -1, -0.4))
 		People.grip(s, "Right", 0.55)
+		# the glass goes where the hand actually got to, so it's always held, never floating
+		# beside a hand that couldn't quite reach
+		gl.global_position = People.world_pos(s, "RightHand") - Vector3(0.02, 0.06, -0.045)
 	People.look_at_point(n, g.look, g.look_amt)
 
 
 ## Who can come in and sit at the bar.
-const GUEST_MODELS := ["kate", "david", "megan", "leonard", "louise"]
+var quiet_lines := false ## promo clips: no floating guest lines (the close-ups would cut them off)
+const GUEST_MODELS := ["kate", "david", "leonard", "louise", "josh"]
 const WALK_SPEED := 1.05
 var guests_leave := true ## tests that need the same four guests switch this off
 
@@ -1898,6 +1910,7 @@ func _animate_walk(g: Dictionary, delta: float) -> void:
 			if t >= g.get("wait", 3.0) and in_shift:
 				var models := GUEST_MODELS.duplicate()
 				models.erase(g.get("model", ""))
+				models.erase(Save.bartender) # never a twin of your own bartender
 				var m: String = models[randi() % models.size()]
 				var nn := People.spawn(m, bar)
 				nn.set_meta("model", m)
@@ -2563,12 +2576,17 @@ func _update_hands(delta: float) -> void:
 	var hold := Vector3.INF ## a tool held in one hand: the point the fingers close round
 	var hold_g := 0.8
 	var hold_side := 0.0 ## 1 right hand, -1 left hand, 0 whichever side the tool is on
+	_unfollow()
+	var held: Node3D = null ## the tool the hands hold this frame: it goes where the hands really got to
 	# hidden while picking a bottle, so the body never covers the speed rail
-	me.node.visible = in_shift and expecting != "pick"
+	# and while the camera looks down into the ice well from behind you, so your own
+	# shoulders and arms never sink into the ice
+	me.node.visible = in_shift and not hide_me and expecting != "pick" and _view != "station" and cam.global_position.z < -0.1 and cam.global_transform.basis.z.y < 0.6
 	if host:
 		host.visible = not in_shift and not _picking
 	if in_shift and not cur.is_empty():
 		if _carry:
+			held = _carry
 			hold = _carry.global_position + Vector3(0, 0.035, 0)
 			hold_g = 0.95 if not _flame.is_empty() else 0.85
 			if not _flame.is_empty():
@@ -2579,12 +2597,14 @@ func _update_hands(delta: float) -> void:
 			rd = fwd
 			rt = -right
 		elif pour_bottle:
+			held = pour_bottle
 			var axis: Vector3 = pour_bottle.global_transform.basis.y
 			r = pour_bottle.to_global(Vector3(0, .23, 0)) - fwd * 0.035
 			rg = 0.8
 			rd = (fwd - axis * fwd.dot(axis)).normalized()
 			rt = axis
 		elif dash_bottle:
+			held = dash_bottle
 			r = dash_bottle.to_global(Vector3(0, .06, 0))
 			rg = 0.85
 			rd = fwd
@@ -2593,12 +2613,15 @@ func _update_hands(delta: float) -> void:
 			var a: float = spoon.get_meta("a")
 			var c: Vector3 = spoon.get_meta("c")
 			spoon.position = c + Vector3(cos(a) * .012, .01, sin(a) * .012)
+			held = spoon
 			hold = spoon.to_global(Vector3(0, .15, 0))
 			hold_g = 0.9
 		elif muddler:
+			held = muddler
 			hold = muddler.to_global(Vector3(0, .17, 0))
 			hold_g = 0.9
 		elif tin_node and (expecting == "shake" or _straining):
+			held = tin_node
 			var up := tin_node.global_transform.basis.y.normalized()
 			if expecting == "shake":
 				# one hand grips the cap end from the right, the other the base from the left,
@@ -2607,22 +2630,19 @@ func _update_hands(delta: float) -> void:
 				var side := tin_node.global_transform.basis.x.normalized()
 				r = tin_node.to_global(Vector3(0, .2, 0)) + side * 0.052 - fwd * 0.02
 				l = tin_node.to_global(Vector3(0, .05, 0)) - side * 0.052 - fwd * 0.02
-				rg = 0.9
-				lg = 0.9
+				rg = 0.72
+				lg = 0.72
 				rd = (-side + fwd * 0.25).normalized()
 				ld = (side + fwd * 0.25).normalized()
 				rt = up
 				lt = up
 			else:
-				# straining: the right hand holds the tin from the side, the left steadies it
-				r = tin_node.to_global(Vector3(0, .1, 0)) + right * 0.06 - fwd * 0.02
-				l = tin_node.to_global(Vector3(0, .16, 0)) - right * 0.06 - fwd * 0.02
-				rg = 0.85
-				lg = 0.6
-				rd = -right
-				ld = right
-				rt = up
-				lt = up
+				# straining: one hand only. The right hand holds the base end of the tipped tin
+				# from the right (its mouth points left, over the glass) and the left hand stays
+				# down, so the arms never cross in front of the camera
+				hold = tin_node.to_global(Vector3(0, .05, 0))
+				hold_g = 0.9
+				hold_side = 1.0
 	if time < _reach_until:
 		r = _reach_pos + Vector3(0.02, 0.0, 0.06)
 		rg = 0.55
@@ -2653,6 +2673,43 @@ func _update_hands(delta: float) -> void:
 	me.thumb_dir["Right"] = rt
 	me.thumb_dir["Left"] = lt
 	me.update(cam, delta)
+	if held and me.node.visible:
+		_follow_hands(held, held != pour_bottle or not (stream and stream.visible))
+
+
+var _followed := {} ## tool -> [where the game put it, where the hands moved it]
+
+
+## A held tool is drawn where the hands really are, never floating beside a hand that is
+## still on its way or couldn't quite reach. While the pour stream runs, the bottle eases
+## back to its spot over the jigger.
+func _follow_hands(n: Node3D, follow: bool) -> void:
+	var miss := Vector3.ZERO
+	var k := 0
+	for side in ["Right", "Left"]:
+		var t: Vector3 = me.target[side]
+		if t != Vector3.INF:
+			miss += me.hand(side) - t
+			k += 1
+	if k == 0:
+		return
+	var want := (miss / k) if follow else Vector3.ZERO
+	var off: Vector3 = n.get_meta("hoff", Vector3.ZERO)
+	off = off.lerp(want, 0.35)
+	n.set_meta("hoff", off)
+	var base := n.global_position
+	n.global_position = base + off
+	_followed[n] = [base, n.global_position]
+
+
+func _unfollow() -> void:
+	for n in _followed:
+		if is_instance_valid(n):
+			var d: Array = _followed[n]
+			# moved by the game since (a tween, a shake): that is the new spot, keep it
+			if n.global_position.is_equal_approx(d[1]):
+				n.global_position = d[0]
+	_followed.clear()
 
 
 ## Pick the bartender you play as (male or female). Both stand behind the bar.

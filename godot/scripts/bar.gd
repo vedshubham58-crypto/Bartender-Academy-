@@ -1616,7 +1616,7 @@ func crowd() -> Array:
 		"beach":
 			return [
 				["josh", Vector3(-1.4, 0, -10.6), PI + .2, "arms_up"],
-				["megan", Vector3(1.6, 0, -10.9), PI - .3, "ready"],
+				["kate", Vector3(1.6, 0, -10.9), PI - .3, "ready"],
 				["leonard", Vector3(-1.1, 0, -13.5), .1, "ready"],
 				["kate", Vector3(1.5, 0, -13.2), -.2, "ready"],
 				["louise", Vector3(1.4, .5, -8.05), 0.0, "sit"],
@@ -1625,7 +1625,7 @@ func crowd() -> Array:
 			return [
 				["louise", Vector3(-1.0, 0, -6.7), .5, "dance"],
 				["leonard", Vector3(.9, 0, -7.6), -.6, "dance2"],
-				["megan", Vector3(-.2, 0, -8.5), .1, "dance2"],
+				["louise", Vector3(-.2, 0, -8.5), .1, "dance2"],
 				["kate", Vector3(-7.62, .5, -8.6), PI / 2, "sit"],
 				["josh", Vector3(-7.62, .5, -6.0), PI / 2, "sit"],
 			]
@@ -1633,13 +1633,13 @@ func crowd() -> Array:
 			return [
 				["louise", Vector3(5.3, .22, -4.4), -PI / 2, "sing"],
 				["leonard", Vector3(-4.4, .5, -8.3), 0.1, "sit"],
-				["megan", Vector3(1.5, .5, -8.3), -0.1, "sit"],
+				["kate", Vector3(1.5, .5, -8.3), -0.1, "sit"],
 				["josh", Vector3(-2.9, .5, -5.4), PI / 2, "sit"],
 			]
 	return [
 		["louise", Vector3(-2.6, .55, -7.62), .15, "sit"],
 		["leonard", Vector3(2.6, .55, -7.62), -.1, "sit"],
-		["megan", Vector3(2.95, .55, -7.62), -.35, "sit"],
+		["louise", Vector3(2.95, .55, -7.62), -.35, "sit"],
 	]
 
 
