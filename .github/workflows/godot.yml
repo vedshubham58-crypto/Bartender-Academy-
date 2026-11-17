@@ -12,8 +12,9 @@ permissions:
 
 env:
   GODOT_VERSION: "4.5.1"
-  # Set when the upload key is stored as repository secrets (see the Google Play bundle step).
-  UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+  # The Google Play upload key: made once by "Make upload key (run once)", kept in the repo
+  # locked with this secret (useless without it).
+  SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
 
 jobs:
   build:
@@ -147,17 +148,18 @@ jobs:
             --notes "Test build from ${GITHUB_SHA::7}."
 
       # The Google Play upload (.aab) with real ads, signed with the upload key.
-      # Needs the UPLOAD_KEYSTORE_BASE64 and UPLOAD_KEYSTORE_PASSWORD repository secrets.
+      # Needs the SIGNING_PASSWORD secret and signing/upload-key.p12.enc (see make-upload-key.yml).
       - name: Export Google Play bundle
-        if: github.event_name != 'pull_request' && env.UPLOAD_KEYSTORE_BASE64 != ''
+        if: github.event_name != 'pull_request' && env.SIGNING_PASSWORD != '' && hashFiles('signing/upload-key.p12.enc') != ''
         env:
-          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: /home/runner/upload.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: /home/runner/upload.p12
           GODOT_ANDROID_KEYSTORE_RELEASE_USER: upload
-          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
-          echo "$UPLOAD_KEYSTORE_BASE64" | base64 -d > /home/runner/upload.keystore
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+            -in signing/upload-key.p12.enc -out /home/runner/upload.p12 -pass env:SIGNING_PASSWORD
           godot --headless --path godot --export-release "Android Store" build/bartender-academy.aab
-          rm /home/runner/upload.keystore
+          rm /home/runner/upload.p12
           ls -la godot/build/bartender-academy.aab
 
       - name: Publish Google Play bundle as a download link
