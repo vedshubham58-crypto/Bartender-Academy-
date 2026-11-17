@@ -17,6 +17,7 @@ const VIEWS := {
 	"station": [Vector3(.04, 1.75, .35), Vector3(0, .7, -.55), 66.0],
 	"pour": [Vector3(-.05, 1.42, -.42), Vector3(.14, 1.2, -.92), 52.0],
 	"work": [Vector3(0.05, 1.5, -.42), Vector3(0.05, 1.12, -1.0), 58.0],
+	"flame": [Vector3(0.06, 1.56, -.34), Vector3(-0.12, 1.18, -.9), 56.0], ## glass in the middle, so the peel and flame stay clear of the recipe card
 	"back": [Vector3(.1, 1.6, -.25), Vector3(0, 1.32, 1.0), 58.0],
 	"menu": [Vector3(0.25, 1.6, -1.45), Vector3(-0.15, 1.33, 0.15), 52.0], ## guest's seat, looking at your bartender
 }
@@ -1103,7 +1104,7 @@ func _next_step() -> void:
 			_set_view("work")
 			_start_blend()
 		"flame":
-			_set_view("work")
+			_set_view("flame")
 			_start_flame()
 
 
@@ -2650,6 +2651,7 @@ func _update_hands(delta: float) -> void:
 			hold_g = 0.95 if not _flame.is_empty() else 0.85
 			if not _flame.is_empty():
 				hold = _carry.global_position # pinched, squeezed over the glass
+				hold_side = -1.0 # left hand: the glass sits left, so no arm crosses the shot
 		elif _serving:
 			r = _serving.position + Vector3(0.02, 0.07, 0.05)
 			rg = 0.45
