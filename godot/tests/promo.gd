@@ -249,6 +249,9 @@ func _process(delta: float) -> void:
 		return
 	var f: String = opts.format
 	main.quiet_lines = _shot == "face" # a floating line over a close-up face gets cut off
+	# your own body is posed for your eyes only: seen from a guest's seat its arms float and
+	# twist round the station, so outside shots leave it out
+	main.hide_me = _shot != ""
 	_shot_t += delta
 	var cur: Dictionary = main.cur
 	if not cur.is_empty() and cur.i != _last_step and cur.i >= 0 and cur.i < cur.drink.steps.size():

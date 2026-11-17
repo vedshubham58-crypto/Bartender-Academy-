@@ -9,8 +9,8 @@ const BARTENDERS := {
 	"remy": {"name": "Leo", "about": "Easy smile, quick hands, relaxed style."},
 	"louise": {"name": "Mia", "about": "Sharp, precise, smart navy uniform."},
 }
-const SHAKE_TILT := -0.45 ## the shaker leans so each hand stays on its own side
-const SHAKE_SPOT := Vector3(0.05, 1.17, -0.88) ## the tin is held up here while shaking
+const SHAKE_TILT := -0.3 ## the shaker leans a little so each hand stays on its own side
+const SHAKE_SPOT := Vector3(0.1, 1.17, -0.86) ## the tin is held up here while shaking
 
 const VIEWS := {
 	"bar": [Vector3(0, 1.6, .5), Vector3(0, 1.08, -1.5), 60.0],
@@ -84,6 +84,7 @@ var _straining := false
 var _reach_until := 0.0
 var _picking := false
 var _view := "" ## the camera view last asked for
+var hide_me := false ## promo clips: outside camera shots never show your first-person body
 var _previews: Array = []
 var _reach_pos := Vector3.ZERO
 var cam_base := Transform3D() ## where the current view puts the camera; swipes look around from here
@@ -2580,7 +2581,7 @@ func _update_hands(delta: float) -> void:
 	# hidden while picking a bottle, so the body never covers the speed rail
 	# and while the camera looks down into the ice well from behind you, so your own
 	# shoulders and arms never sink into the ice
-	me.node.visible = in_shift and expecting != "pick" and _view != "station" and cam.global_position.z < -0.1 and cam.global_transform.basis.z.y < 0.6
+	me.node.visible = in_shift and not hide_me and expecting != "pick" and _view != "station" and cam.global_position.z < -0.1 and cam.global_transform.basis.z.y < 0.6
 	if host:
 		host.visible = not in_shift and not _picking
 	if in_shift and not cur.is_empty():
@@ -2629,8 +2630,8 @@ func _update_hands(delta: float) -> void:
 				var side := tin_node.global_transform.basis.x.normalized()
 				r = tin_node.to_global(Vector3(0, .2, 0)) + side * 0.052 - fwd * 0.02
 				l = tin_node.to_global(Vector3(0, .05, 0)) - side * 0.052 - fwd * 0.02
-				rg = 0.9
-				lg = 0.9
+				rg = 0.72
+				lg = 0.72
 				rd = (-side + fwd * 0.25).normalized()
 				ld = (side + fwd * 0.25).normalized()
 				rt = up
