@@ -412,7 +412,9 @@ func _update_bubbles() -> void:
 		var b: Button = g.bubble
 		if b == null:
 			continue
-		var has: bool = not g.order.is_empty() and in_shift
+		# while you make a drink the orders step aside, so they never cover the pour meter
+		# or the recipe; they come back as soon as the drink is served
+		var has: bool = not g.order.is_empty() and in_shift and cur.is_empty()
 		b.visible = has
 		if not has:
 			continue
@@ -430,6 +432,14 @@ func _update_bubbles() -> void:
 		bp.x = clampf(bp.x, 4.0, vw.x - b.size.x - 4.0)
 		if bp.x + b.size.x > vw.x - 160.0 and bp.y < 112.0:
 			bp.y = 112.0 # keep clear of the timer and coins
+		# never cover the recipe ticket: slide right of it, or below it if there's no room
+		if ticket_panel and ticket_panel.visible:
+			var tr := Rect2(ticket_panel.position, ticket_panel.size).grow(6.0)
+			if tr.intersects(Rect2(bp, b.size)):
+				if tr.end.x + b.size.x + 4.0 <= vw.x - 4.0 and not (tr.end.x + b.size.x > vw.x - 160.0 and bp.y < 112.0):
+					bp.x = tr.end.x
+				else:
+					bp.y = tr.end.y
 		b.position = bp
 		b.visible = not cam.is_position_behind(_head_pos(g))
 
@@ -560,9 +570,26 @@ func show_menu() -> void:
 	var shop_b := _button("SHOP  ● %d" % Save.coins, show_shop, 20, Color(0.55, 0.4, 0.1))
 	shop_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mrow.add_child(shop_b)
-	var bars_b := _button("BARS" + ("  NEW" if _new_bar_waiting() else ""), show_bars, 20, Color(0.2, 0.3, 0.42))
+	var fresh := _new_bar_waiting()
+	var bars_b := _button("NEW BAR OPEN!" if fresh else "BARS", show_bars, 20, Color(0.9, 0.35, 0.15) if fresh else Color(0.2, 0.3, 0.42))
 	bars_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mrow.add_child(bars_b)
+	if fresh:
+		# a red dot and a gentle pulse, so a newly opened bar is hard to miss
+		var dot := Panel.new()
+		var ds := StyleBoxFlat.new()
+		ds.bg_color = C_RED
+		ds.set_corner_radius_all(11)
+		ds.border_color = Color.WHITE
+		ds.set_border_width_all(2)
+		dot.add_theme_stylebox_override("panel", ds)
+		dot.size = Vector2(22, 22)
+		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bars_b.add_child(dot)
+		bars_b.resized.connect(func(): dot.position = Vector2(bars_b.size.x - 14, -8))
+		var pulse := bars_b.create_tween().set_loops()
+		pulse.tween_property(bars_b, "modulate", Color(1.25, 1.15, 1.0), 0.6).set_trans(Tween.TRANS_SINE)
+		pulse.tween_property(bars_b, "modulate", Color.WHITE, 0.6).set_trans(Tween.TRANS_SINE)
 	# bartender and mocktail share a row so the drink-responsibly line stays on screen
 	var brow := HBoxContainer.new()
 	brow.add_theme_constant_override("separation", 12)
@@ -730,6 +757,24 @@ func _move_to_bar(id: String) -> void:
 	get_tree().reload_current_scene()
 
 
+## New drinks a finished shift opens (shifts counts that shift): a quick start that hooks
+## new players, then one a shift so there is always a reason to come back tomorrow.
+static func drinks_per_shift(shifts: int) -> int:
+	return 2 if shifts <= 3 else 1
+
+
+## How many more shifts until drink number i opens.
+func _shifts_until(i: int) -> int:
+	var have := Save.unlocked
+	var n := Save.shifts
+	var more := 0
+	while have <= i:
+		n += 1
+		more += 1
+		have += drinks_per_shift(n)
+	return more
+
+
 ## The bar a finished shift has just opened, or "".
 func _bar_unlocked_now() -> String:
 	for id in Bar.VENUES:
@@ -779,7 +824,7 @@ func show_book() -> void:
 		card.add_child(cv)
 		if i >= Save.unlocked:
 			cv.add_child(_label("LOCKED  ·  %s" % d.name, 30, Color(1, 1, 1, 0.45)))
-			var more: int = (i - Save.unlocked) / 2 + 1
+			var more := _shifts_until(i)
 			cv.add_child(_label("Unlocks after %d more shift%s." % [more, "" if more == 1 else "s"], 18, Color(1, 1, 1, 0.45)))
 			continue
 		var name_line := "%s   ·   %s glass · %s" % [Recipes.drink_name(d), Recipes.GLASSES[d.glass].name, d.method]
@@ -2035,7 +2080,7 @@ func _shift_summary() -> void:
 	var unlocked := ""
 	if Save.unlocked < Recipes.DRINKS.size() and shift_stats.served > 0:
 		var names := []
-		for k in 2:
+		for k in drinks_per_shift(Save.shifts):
 			if Save.unlocked < Recipes.DRINKS.size():
 				Save.unlocked += 1
 				names.append(Recipes.drink_name(Recipes.DRINKS[Save.unlocked - 1]))
@@ -2688,7 +2733,7 @@ func _update_hands(delta: float) -> void:
 	me.thumb_dir["Left"] = lt
 	me.update(cam, delta)
 	if held and me.node.visible:
-		_follow_hands(held, held != pour_bottle or not (stream and stream.visible))
+		_follow_hands(held, held != pour_bottle) # the bottle stays over the jigger, the hand comes to it
 
 
 var _followed := {} ## tool -> [where the game put it, where the hands moved it]

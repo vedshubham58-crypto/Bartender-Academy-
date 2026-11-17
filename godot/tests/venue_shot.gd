@@ -14,7 +14,7 @@ func _initialize() -> void:
 	save.gift_day = save.day_key() # no tips jar over the picture
 	var ui: bool = args.size() > 2 and args[2] == "ui"
 	if ui:
-		save.shifts = 9 # beach and hotel open, speakeasy still locked
+		save.shifts = 13 # beach and hotel open, speakeasy still locked
 	var main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	for i in 20:

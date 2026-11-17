@@ -55,7 +55,7 @@ func free_body() -> void:
 
 func _rest(side: String, cam: Camera3D, fwd: Vector3, right: Vector3) -> Vector3:
 	var o := 1.0 if side == "Right" else -1.0
-	return cam.global_position + fwd * 0.22 + right * (0.26 * o) + Vector3.DOWN * 0.72
+	return cam.global_position + fwd * 0.02 + right * (0.3 * o) + Vector3.DOWN * 0.9
 
 
 func update(cam: Camera3D, dt: float) -> void:
