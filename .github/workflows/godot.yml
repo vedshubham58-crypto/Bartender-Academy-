@@ -102,6 +102,10 @@ jobs:
           # Google Play needs the newest Android target (API 36), so compile against it too.
           sed -i -E 's/(compileSdk *: *)[0-9]+/\136/; s/(buildTools *: *)"[^"]*"/\1"36.0.0"/' godot/android/build/config.gradle
           echo "android.suppressUnsupportedCompileSdk=36" >> godot/android/build/gradle.properties
+          # The game is landscape-only; tell Play that a landscape screen is not a hard requirement,
+          # so devices that report no landscape support (some PCs, XR) are not filtered out.
+          sed -i '0,/<application/s//<uses-feature android:name="android.hardware.screen.landscape" android:required="false" \/>\n    <application/' godot/android/build/src/main/AndroidManifest.xml
+          grep -n "screen.landscape" godot/android/build/src/main/AndroidManifest.xml
           grep -nE "compileSdk|targetSdk|buildTools" godot/android/build/config.gradle
           # Play Console's version number goes up with every CI run.
           sed -i "s/^version\/code=.*/version\/code=${GITHUB_RUN_NUMBER}/" godot/export_presets.cfg
@@ -114,6 +118,7 @@ jobs:
           $aapt2 dump xmltree --file AndroidManifest.xml godot/build/bartender-academy.apk > manifest.txt
           grep -q "org.godotengine.plugin.v2.NeonAds" manifest.txt
           grep -q "com.google.android.gms.ads.APPLICATION_ID" manifest.txt
+          grep -q "android.hardware.screen.landscape" manifest.txt
           unzip -p godot/build/bartender-academy.apk 'classes*.dex' | grep -aq "com/vedshubham/neonads/NeonAds"
           echo "AdMob plugin found in the APK"
           ls -la godot/build/bartender-academy.apk
