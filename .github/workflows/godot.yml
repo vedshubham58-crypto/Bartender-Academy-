@@ -104,8 +104,10 @@ jobs:
           echo "android.suppressUnsupportedCompileSdk=36" >> godot/android/build/gradle.properties
           # The game is landscape-only; tell Play that a landscape screen is not a hard requirement,
           # so devices that report no landscape support (some PCs, XR) are not filtered out.
-          sed -i '0,/<application/s//<uses-feature android:name="android.hardware.screen.landscape" android:required="false" \/>\n    <application/' godot/android/build/src/main/AndroidManifest.xml
-          grep -n "screen.landscape" godot/android/build/src/main/AndroidManifest.xml
+          manifest=godot/android/build/AndroidManifest.xml
+          [ -f "$manifest" ] || manifest=godot/android/build/src/main/AndroidManifest.xml
+          sed -i '0,/<application/s//<uses-feature android:name="android.hardware.screen.landscape" android:required="false" \/>\n    <application/' "$manifest"
+          grep -n "screen.landscape" "$manifest"
           grep -nE "compileSdk|targetSdk|buildTools" godot/android/build/config.gradle
           # Play Console's version number goes up with every CI run.
           sed -i "s/^version\/code=.*/version\/code=${GITHUB_RUN_NUMBER}/" godot/export_presets.cfg
