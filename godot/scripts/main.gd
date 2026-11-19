@@ -1872,8 +1872,8 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 				g.look_amt = lerpf(g.look_amt, 0.0, 0.3)
 		gl.global_position = want
 		gl.rotation.x = tilt
-		# right hand around the glass, on the guest's side of it
-		targets["Right"] = want + Vector3(0.02, 0.06, -0.045)
+		# right wrist beside the glass on the guest's side, so the palm wraps it from outside
+		targets["Right"] = want + _guest_wrist_offset(gl)
 		# after the first taste of a bad drink: shake the head, pull a face, steam or a green puff
 		var fx: String = g.get("fx", "")
 		if fx == "yuck" or fx == "steam":
@@ -1902,11 +1902,31 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 		return
 	if targets.has("Right") and gl != null and react != "":
 		People.reach(s, "Right", targets["Right"], Vector3(0.5, -1, -0.4))
-		People.grip(s, "Right", 0.55)
+		# fingers run round the glass with the thumb on top, palm against it
+		People.orient_hand(s, "Right", GUEST_GRIP_FINGERS, Vector3.UP)
+		People.grip(s, "Right", 0.75)
 		# the glass goes where the hand actually got to, so it's always held, never floating
 		# beside a hand that couldn't quite reach
-		gl.global_position = People.world_pos(s, "RightHand") - Vector3(0.02, 0.06, -0.045)
+		gl.global_position = People.world_pos(s, "RightHand") - _guest_wrist_offset(gl)
 	People.look_at_point(n, g.look, g.look_amt)
+
+
+## A seated guest's right hand on a served glass: the hand comes from the guest's side
+## (they face +z, their right is -x), palm on the glass, fingers wrapping round it.
+const GUEST_GRIP_FROM := Vector3(-0.35, 0, -1) ## from the glass towards the wrist
+const GUEST_GRIP_FINGERS := Vector3(1, 0, -0.35) ## along the glass's near side
+## Where each glass is held: [height above its base, radius there]. Stemmed glasses by the stem.
+const GUEST_GRIP := {"highball": [.065, .033], "rocks": [.035, .043], "coupe": [.035, .005],
+	"martini": [.035, .005], "flute": [.04, .004], "mug": [.055, .045]}
+
+
+## Wrist position relative to the glass's base for [constant GUEST_GRIP].
+func _guest_wrist_offset(gl: Node3D) -> Vector3:
+	var grip: Array = GUEST_GRIP.get(gl.get_meta("kind", "rocks"), [.05, .04])
+	var from := GUEST_GRIP_FROM.normalized()
+	var along := GUEST_GRIP_FINGERS.normalized()
+	# palm surface on the glass, palm centre a little before the knuckles
+	return Vector3(0, grip[0], 0) + from * (grip[1] + 0.038) - along * 0.05
 
 
 ## Who can come in and sit at the bar.

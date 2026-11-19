@@ -17,6 +17,8 @@ for build in "${BUILDS[@]}"; do
   adb logcat -d -b crash | tail -n 120
   echo "---- errors (godot, runtime, native) ----"
   adb logcat -d '*:E' | grep -iE "godot|AndroidRuntime|DEBUG|FATAL|libc|bartender|neonads|Ads" | uniq | tail -n 150
+  echo "---- what happened to the process ----"
+  adb logcat -d | grep -E "$PKG|AndroidRuntime|lowmemorykiller|libprocessgroup" | grep -v "shader_gles3\|GL_MAX_FRAGMENT" | uniq | tail -n 60
   echo "---- godot log (all levels) ----"
-  adb logcat -d -s godot:V | grep -v "^$" | uniq | tail -n 120
+  adb logcat -d -s godot:V | grep -v "shader_gles3\|Program linking\|GL_MAX_FRAGMENT\|godot   : $\|godot   : 1: $\|Method/function failed" | uniq | tail -n 80
 done
