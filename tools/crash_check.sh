@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Usage: crash_check.sh <dir with test.apk and store-universal.apk>
+# Usage: crash_check.sh <dir> [apk names...]  (default: test.apk store-universal.apk)
 # Opens each build on the running emulator and prints crashes from logcat.
 set -u
 PKG=com.vedshubham.bartenderacademy
-for build in test.apk store-universal.apk; do
+DIR=$1; shift
+BUILDS=("$@"); [ ${#BUILDS[@]} -eq 0 ] && BUILDS=(test.apk store-universal.apk)
+for build in "${BUILDS[@]}"; do
   echo "================ $build ================"
   adb uninstall "$PKG" >/dev/null 2>&1
-  adb install -r "$1/$build" || { echo "INSTALL FAILED"; continue; }
+  adb install -r "$DIR/$build" || { echo "INSTALL FAILED"; continue; }
   adb logcat -c
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
   sleep 40
@@ -14,5 +16,7 @@ for build in test.apk store-universal.apk; do
   echo "---- crash buffer ----"
   adb logcat -d -b crash | tail -n 120
   echo "---- errors (godot, runtime, native) ----"
-  adb logcat -d '*:E' | grep -iE "godot|AndroidRuntime|DEBUG|FATAL|libc|bartender|neonads|Ads" | tail -n 150
+  adb logcat -d '*:E' | grep -iE "godot|AndroidRuntime|DEBUG|FATAL|libc|bartender|neonads|Ads" | uniq | tail -n 150
+  echo "---- godot log (all levels) ----"
+  adb logcat -d -s godot:V | grep -v "^$" | uniq | tail -n 120
 done

@@ -142,7 +142,7 @@ func _ready() -> void:
 	ui = CanvasLayer.new()
 	add_child(ui)
 	_build_hud()
-	Audio.loop("crowd", true, -18.0)
+	Audio.loop("crowd", true, -22.0)
 	if Save.birth_year == 0:
 		show_age_gate()
 	else:
@@ -615,7 +615,7 @@ func show_menu() -> void:
 	v.add_child(row)
 	row.add_child(_button("SOUND: %s" % ("ON" if Save.sound else "OFF"), func():
 		Audio.set_sound(not Save.sound)
-		Audio.loop("crowd", Save.sound, -18.0)
+		Audio.loop("crowd", Save.sound, -22.0)
 		show_menu(), 18, Color(0.25, 0.2, 0.3)))
 	row.add_child(_button("MUSIC: %s" % Audio.style_name(), func():
 		Audio.next_style()

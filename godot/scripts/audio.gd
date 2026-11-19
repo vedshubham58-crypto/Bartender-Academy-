@@ -24,6 +24,15 @@ const STYLES := ["radio", "house", "tropical", "disco", "lounge", "off"]
 const VENUE_TRACK := {"rooftop": "house", "beach": "tropical", "hotel": "disco", "speakeasy": "lounge"}
 ## How many times a track plays before the radio moves on.
 const RADIO_PLAYS := 2
+## Music sits on its own bus, a bit under the effects, and dips further while the
+## player pours, shakes or muddles (and briefly after a result sound), so the
+## effects never fight the music.
+const MUSIC_BUS_DB := -4.0
+const MUSIC_DUCK_DB := -9.0
+const DUCK_AFTER_SFX := 1.2
+const DUCK_SOUNDS := ["good", "bad", "tip", "muddle", "pour", "shake", "ice", "clink"]
+var _music_bus := -1
+var _duck_left := 0.0
 
 
 func _ready() -> void:
@@ -45,7 +54,15 @@ func _ready() -> void:
 		p.stream = _sfx[n]
 		add_child(p)
 		_loops[n] = p
+	_music_bus = AudioServer.get_bus_index("Music")
+	if _music_bus == -1:
+		AudioServer.add_bus()
+		_music_bus = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(_music_bus, "Music")
+		AudioServer.set_bus_send(_music_bus, "Master")
+	AudioServer.set_bus_volume_db(_music_bus, MUSIC_BUS_DB)
 	_music = AudioStreamPlayer.new()
+	_music.bus = "Music"
 	add_child(_music)
 	_radio_timer = Timer.new()
 	_radio_timer.one_shot = true
@@ -63,7 +80,25 @@ func play(name: String, volume_db := 0.0, pitch := 1.0) -> void:
 			p.volume_db = volume_db
 			p.pitch_scale = pitch
 			p.play()
+			if name in DUCK_SOUNDS:
+				_duck_left = maxf(_duck_left, minf(p.stream.get_length() / pitch, 2.0) + DUCK_AFTER_SFX * 0.5)
 			return
+
+
+## Smoothly dips the music while effects are playing.
+func _process(delta: float) -> void:
+	if _music_bus == -1:
+		return
+	if _loops["pour"].playing or _loops["shake"].playing:
+		_duck_left = DUCK_AFTER_SFX
+	else:
+		_duck_left = maxf(_duck_left - delta, 0.0)
+	var busy := _duck_left > 0.0
+	var target := MUSIC_BUS_DB + (MUSIC_DUCK_DB if busy else 0.0)
+	var cur := AudioServer.get_bus_volume_db(_music_bus)
+	# fast dip (~0.15 s), slower recovery (~0.8 s)
+	var speed := 60.0 if target < cur else 11.0
+	AudioServer.set_bus_volume_db(_music_bus, move_toward(cur, target, speed * delta))
 
 
 ## Starts or stops a looping sound (pour, shake, crowd).
