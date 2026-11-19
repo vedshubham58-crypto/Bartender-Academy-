@@ -2774,10 +2774,13 @@ func _update_hands(delta: float) -> void:
 		elif pour_bottle:
 			held = pour_bottle
 			var axis: Vector3 = pour_bottle.global_transform.basis.y
-			r = pour_bottle.to_global(Vector3(0, .23, 0)) - fwd * 0.035
 			rg = 0.8
 			rd = (fwd - axis * fwd.dot(axis)).normalized()
 			rt = axis
+			# overhand: palm on the top of the tipped bottle, fingers over it and round the far
+			# side, so from behind the bar you see the back of the hand over the glass
+			var top := (Vector3.UP - axis * axis.dot(Vector3.UP)).normalized()
+			r = pour_bottle.to_global(Vector3(0, .2, 0)) + top * 0.058 - rd * 0.055
 		elif dash_bottle:
 			held = dash_bottle
 			r = dash_bottle.to_global(Vector3(0, .06, 0))
