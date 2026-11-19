@@ -93,6 +93,7 @@ func _ready() -> void:
 			if opts.has(k):
 				opts[k] = a.substr(a.find("=") + 1)
 	Save.birth_year = 1995
+	Save.trained = "--training" not in OS.get_cmdline_user_args()
 	Save.shifts = 3
 	Save.unlocked = Recipes.DRINKS.size()
 	Save.mocktail = false

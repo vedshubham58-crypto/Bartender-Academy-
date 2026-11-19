@@ -4,6 +4,7 @@ func _initialize() -> void:
 	await process_frame
 	var save = root.get_node("/root/Save")
 	save.birth_year = 1995
+	save.trained = "--training" not in OS.get_cmdline_user_args()
 	save.gift_day = save.day_key()
 	var main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)

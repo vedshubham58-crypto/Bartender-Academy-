@@ -14,6 +14,7 @@ func _ready() -> void:
 	if args.size() > 0:
 		out = args[0]
 	Save.birth_year = 1995
+	Save.trained = "--training" not in OS.get_cmdline_user_args()
 	Save.shifts = 0
 	Save.made = {}
 	Save.best = {}
@@ -64,6 +65,15 @@ func _ready() -> void:
 		g.patience = 100.0
 		await _frames(2)
 		await make(gi, k < 2 or all_shots)
+	if "--training" in args:
+		# the guided first drink: the card that starts the real shift
+		await _secs(2.6)
+		await shot("trained")
+		check(Save.trained and not main.training, "training finished after the first drink")
+		main.start_shift()
+		await _secs(1.0)
+		await shot("shift_after_training")
+		check(":" in main.timer_label.text, "real shift has the clock")
 	main.shift_left = 0.0
 	await _secs(1.0)
 	await shot("summary")

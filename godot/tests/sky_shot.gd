@@ -4,6 +4,7 @@ extends Node
 
 func _ready() -> void:
 	Save.birth_year = 1995
+	Save.trained = "--training" not in OS.get_cmdline_user_args()
 	var out := "/tmp/shots/sky"
 	for a in OS.get_cmdline_user_args():
 		out = a

@@ -37,6 +37,12 @@ static func matte(n: Node3D, keep_normal := true) -> void:
 					c.metallic_texture = null
 					c.metallic_specular = 0.12
 					c.normal_enabled = keep_normal and c.normal_enabled
+					# One model's skin and clothes came marked see-through: on phones the inside
+					# of the mouth and the eyes then showed over the face like a mask. Only
+					# hair and eyelashes need transparency; everything else is solid.
+					var name_l := String(m.name).to_lower()
+					if not ("hair" in name_l or "eyelash" in name_l):
+						c.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 					_matte[key] = c
 				m.set_surface_override_material(si, _matte[key])
 

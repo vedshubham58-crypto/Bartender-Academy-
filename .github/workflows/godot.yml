@@ -114,6 +114,31 @@ jobs:
           godot --headless --path godot --export-release "Android" build/bartender-academy.apk
           ls -la godot/build
 
+      # Branch builds only: x86_64 copies of the test and store builds, run on an
+      # emulator by the emulator-check job below (no ARM translation in the way).
+      - name: Export x86_64 APKs for the emulator check
+        if: github.ref != 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: /home/runner/debug.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: android
+        run: |
+          cp godot/export_presets.cfg /tmp/presets.bak
+          sed -i 's/^architectures\/x86_64=false/architectures\/x86_64=true/; s/^gradle_build\/export_format=1/gradle_build\/export_format=0/' godot/export_presets.cfg
+          mkdir -p emu
+          godot --headless --path godot --export-release "Android" ../emu/test.apk
+          godot --headless --path godot --export-release "Android Store" ../emu/store.apk
+          cp /tmp/presets.bak godot/export_presets.cfg
+          ls -la emu
+
+      - name: Keep the x86_64 APKs for the emulator check
+        if: github.ref != 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: emu-apks
+          path: emu/*.apk
+          retention-days: 3
+
       - name: Check the ads plugin is inside the APK
         run: |
           aapt2=$(ls $ANDROID_SDK_ROOT/build-tools/*/aapt2 | tail -1)
@@ -177,3 +202,29 @@ jobs:
           gh release create store-build bartender-academy.aab --prerelease \
             --title "Bartender Academy Google Play bundle" \
             --notes "Upload this .aab to Play Console. Version code ${GITHUB_RUN_NUMBER}, from ${GITHUB_SHA::7}."
+
+  emulator-check:
+    needs: build
+    if: github.ref != 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: emu-apks
+          path: ck
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Open both builds on an emulator and print crashes
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          script: bash tools/crash_check.sh ck test.apk store.apk

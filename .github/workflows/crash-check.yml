@@ -1,0 +1,46 @@
+name: Crash check (Play bundle on an emulator)
+
+# Installs the Google Play bundle (.aab) and the test APK on an Android emulator,
+# opens each for 40 seconds and prints any crash from logcat into this log.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/project-thread-eluqev]
+    paths: [.github/workflows/crash-check.yml, tools/crash_check.sh]
+
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Download builds and bundletool
+        run: |
+          mkdir -p ck && cd ck
+          curl -sSL -o store.aab https://github.com/${{ github.repository }}/releases/download/store-build/bartender-academy.aab
+          curl -sSL -o test.apk https://github.com/${{ github.repository }}/releases/download/test-build/bartender-academy.apk
+          curl -sSL -o bundletool.jar https://github.com/google/bundletool/releases/download/1.18.1/bundletool-all-1.18.1.jar
+          keytool -genkeypair -keystore ck.keystore -storepass android -alias ck -keypass android \
+            -keyalg RSA -keysize 2048 -validity 1000 -dname "CN=Check"
+          java -jar bundletool.jar build-apks --bundle=store.aab --output=store.apks --mode=universal \
+            --ks=ck.keystore --ks-pass=pass:android --ks-key-alias=ck --key-pass=pass:android
+          unzip -o -q store.apks universal.apk && mv universal.apk store-universal.apk
+          ls -la
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run both builds on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          script: bash tools/crash_check.sh ck
