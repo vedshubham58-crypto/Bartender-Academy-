@@ -1925,7 +1925,6 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 			g.rest_of = gl
 		g.react_t = float(g.get("react_t", 0.0)) + delta
 		var rest: Vector3 = g.rest
-		var mouth := head + fwd * 0.12 + Vector3(0, -0.2, 0)
 		var want := rest
 		var tilt := 0.0
 		if react == "legend" and g.react_t < 3.2:
@@ -1939,7 +1938,11 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 			if g.sip_next < 0.0:
 				var k: float = clampf(-g.sip_next / 1.8, 0.0, 1.0) # 1.8 s sip
 				var up: float = sin(k * PI)
-				want = rest.lerp(mouth, up)
+				# the rim on the lips, the glass tipped up toward the face
+				var rim: Array = Bar.GLASS_PROFILES.get(gl.get_meta("kind", "rocks"), [[.04, .1]]).back()
+				var lips: Vector3 = head + fwd * 0.1 + Vector3(0, -0.15, 0)
+				var at_mouth: Vector3 = lips + fwd * (rim[0] * 0.7 + 0.01) - Basis(Vector3.RIGHT, -0.7) * Vector3(0, rim[1], 0)
+				want = rest.lerp(at_mouth, up)
 				tilt = -0.7 * up
 				if k >= 1.0:
 					g.sip_next = randf_range(4.0, 7.0)
@@ -1951,7 +1954,7 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 		gl.global_position = want
 		gl.rotation.x = tilt
 		# right wrist beside the glass on the guest's side, so the palm wraps it from outside
-		targets["Right"] = want + _guest_wrist_offset(gl)
+		targets["Right"] = want + Basis(Vector3.RIGHT, tilt) * _guest_wrist_offset(gl)
 		# after the first taste of a bad drink: shake the head, pull a face, steam or a green puff
 		var fx: String = g.get("fx", "")
 		if fx == "yuck" or fx == "steam":
@@ -1981,18 +1984,19 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 	if targets.has("Right") and gl != null and react != "":
 		People.reach(s, "Right", targets["Right"], Vector3(0.5, -1, -0.4))
 		# fingers run round the glass with the thumb on top, palm against it
-		People.orient_hand(s, "Right", GUEST_GRIP_FINGERS, Vector3.UP)
+		var tb := Basis(Vector3.RIGHT, gl.rotation.x) # the hand tips with the glass
+		People.orient_hand(s, "Right", tb * GUEST_GRIP_FINGERS, tb * Vector3.UP)
 		People.grip(s, "Right", 0.9)
 		# the glass goes where the hand actually got to, so it's always held, never floating
 		# beside a hand that couldn't quite reach
-		gl.global_position = People.world_pos(s, "RightHand") - _guest_wrist_offset(gl)
+		gl.global_position = People.world_pos(s, "RightHand") - tb * _guest_wrist_offset(gl)
 		# thumb round the far side of the glass, so it never pokes through the middle
 		var grip: Array = GUEST_GRIP.get(gl.get_meta("kind", "rocks"), [.05, .04])
-		var c: Vector3 = gl.global_position + Vector3(0, grip[0] - 0.008, 0)
+		var c: Vector3 = gl.global_position + tb * Vector3(0, grip[0] - 0.008, 0)
 		var r: float = grip[1] + 0.012
-		People.aim_at(s, "RightHandThumb1", "RightHandThumb2", c + Vector3(-r * 0.3, 0, -r))
-		People.aim_at(s, "RightHandThumb2", "RightHandThumb3", c + Vector3(r * 0.5, 0, -r * 1.05))
-		People.aim_at(s, "RightHandThumb3", "RightHandThumb4", c + Vector3(r, 0, -r * 0.6))
+		People.aim_at(s, "RightHandThumb1", "RightHandThumb2", c + tb * Vector3(-r * 0.3, 0, -r))
+		People.aim_at(s, "RightHandThumb2", "RightHandThumb3", c + tb * Vector3(r * 0.5, 0, -r * 1.05))
+		People.aim_at(s, "RightHandThumb3", "RightHandThumb4", c + tb * Vector3(r, 0, -r * 0.6))
 	People.look_at_point(n, g.look, g.look_amt)
 
 

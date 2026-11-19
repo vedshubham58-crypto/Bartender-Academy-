@@ -42,6 +42,8 @@ func _initialize() -> void:
 		"side": [Vector3(g.x + 0.5, 1.32, -0.75), Vector3(g.x - 0.1, 1.22, -1.4)],
 		"top": [Vector3(g.x - 0.18, 1.55, -1.18), Vector3(g.x - 0.17, 1.12, -1.25)],
 		"front": [Vector3(g.x - 0.1, 1.36, -0.55), Vector3(g.x - 0.1, 1.2, -1.45)],
+		"face": [Vector3(g.x - 0.05, 1.5, -0.5), Vector3(g.x - 0.08, 1.38, -1.45)],
+		"face_side": [Vector3(g.x + 0.55, 1.5, -0.8), Vector3(g.x - 0.08, 1.4, -1.45)],
 	}
 	main.ui.visible = false
 	var c := Camera3D.new()
@@ -49,11 +51,18 @@ func _initialize() -> void:
 	c.fov = 30
 	for k in 22:
 		for i in 6:
+			if "--peak" in args:
+				g.sip_next = -0.9 # hold the sip at its top
 			await process_frame
+		if "--peak" in args:
+			var hd: Vector3 = main._head_pos(g)
+			print("peak glass ", gl.global_position, " rot ", gl.rotation.x, " head ", hd, " hand ", People.world_pos(People.skel(g.node), "RightHand"))
 		for v in views:
 			var from: Vector3 = views[v][0]
 			c.global_transform = Transform3D(Basis.looking_at(views[v][1] - from), from)
 			c.make_current()
+			if "--peak" in args:
+				g.sip_next = -0.9
 			await process_frame
 			var img := root.get_texture().get_image()
 			img.save_jpg("%s/%s_%02d.jpg" % [out, v, k], 0.8)
