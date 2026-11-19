@@ -4,6 +4,7 @@ extends Node
 
 func _ready() -> void:
 	Save.birth_year = 1995
+	Save.trained = "--training" not in OS.get_cmdline_user_args()
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	add_child(main)
 	for i in 10:

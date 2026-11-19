@@ -68,6 +68,27 @@ var ticket_panel: PanelContainer
 var timer_label: Label
 var coin_label: Label
 var hint_label: Label
+var coach_panel: PanelContainer
+var coach_label: Label
+## The guided first drink: no clock, one guest, every step explained in plain words.
+var training := false
+## Plain-words help for each kind of step, shown in the coach box while training.
+const COACH := {
+	"order": "This guest wants a drink. Tap the order bubble above their head to start making it.",
+	"glass": "Every drink has its own glass. The recipe card (top left) says which one. Tap that glass below.",
+	"rim": "Some glasses get salt or sugar on the edge. Pick what the recipe card says.",
+	"ice": "Now the ice. Tap the kind of ice the recipe card asks for.",
+	"pour": "Tap the glowing bottle. Then HOLD the pour button and let go when the jigger reaches the line. Closer to the line = more stars.",
+	"top": "Tap the glowing bottle. Then HOLD to fill the glass and let go at the line.",
+	"dash": "Tap the glowing bottle for a small dash.",
+	"layer": "Tap the glowing bottle, then pour it slowly on top.",
+	"garnish": "Last touch: the garnish. Tap the one on the recipe card (the glowing one).",
+	"muddle": "Tap MUDDLE a few times to press the fruit and herbs.",
+	"shake": "Swipe up and down fast (or shake your phone) until the bar is full.",
+	"stir": "Draw circles on the screen until the bar is full.",
+	"strain": "Tap STRAIN to pour the drink into the glass.",
+	"serve": "Done! Tap SERVE to slide the drink to your guest.",
+}
 var actions: HBoxContainer
 var toast: Label
 var meter: Control
@@ -309,6 +330,19 @@ func _build_hud() -> void:
 	pb.position = Vector2(-330, 18)
 	pb.size = Vector2(70, 60)
 	hud.add_child(pb)
+	# training coach: plain-words help box, top centre, only in the guided first drink
+	coach_panel = PanelContainer.new()
+	coach_panel.add_theme_stylebox_override("panel", _panel(Color(0.98, 0.93, 0.8, 0.96), 18))
+	coach_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	coach_panel.position = Vector2(-250, 96)
+	coach_panel.custom_minimum_size = Vector2(560, 0)
+	coach_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	coach_panel.visible = false
+	hud.add_child(coach_panel)
+	coach_label = _label("", 25, Color(0.16, 0.1, 0.06))
+	coach_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	coach_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	coach_panel.add_child(coach_label)
 	# instruction + actions at the bottom
 	hint_label = _label("", 26, Color.WHITE)
 	hint_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
@@ -871,6 +905,7 @@ func start_shift() -> void:
 	Ads.show_banner(true)
 	var go := func():
 		in_shift = true
+		training = not Save.trained
 		shift_left = SHIFT_SECONDS
 		shift_stats = {"served": 0, "stars": 0.0, "coins": 0, "perfect": 0, "score": 0, "speedy": 0, "memory": 0, "flawless": 0, "streak": 0, "best_streak": 0}
 		# boosts bought in the shop last for this one shift
@@ -887,10 +922,15 @@ func start_shift() -> void:
 			if g.bubble == null:
 				_make_bubble(g)
 			g.order = {}
-			if not g.waiter and i < 3 and g.get("state", "seated") == "seated":
+			if not g.waiter and (i == 0 if training else i < 3) and g.get("state", "seated") == "seated":
 				_new_order(g, 6.0 * i)
 		_clear_actions()
 		hint_label.text = "Tap a guest's order to start making it"
+		_coach("order")
+		timer_label.add_theme_font_size_override("font_size", 26 if training else 44)
+		if training:
+			timer_label.text = "PRACTICE"
+			timer_label.add_theme_color_override("font_color", C_GOLD)
 		var on := []
 		if boost.has("patience"):
 			on.append("Happy guests")
@@ -899,6 +939,36 @@ func start_shift() -> void:
 		if not on.is_empty():
 			show_toast("Boost on: %s" % " + ".join(on), C_GOLD, 40)
 	go.call()
+
+
+## Shows the plain-words help for [param kind] while training ("" hides it).
+func _coach(kind: String) -> void:
+	if coach_panel == null:
+		return
+	var text: String = COACH.get(kind, "Follow the recipe card at the top left.") if kind != "" else ""
+	coach_panel.visible = training and text != ""
+	coach_label.text = text
+
+
+## The first drink is served: say what a real shift is, then start one.
+func _training_done() -> void:
+	if not training or not in_shift:
+		return
+	training = false
+	Save.trained = true
+	Save.save()
+	in_shift = false
+	coach_panel.visible = false
+	hud.visible = false
+	var v := _center_box(_overlay(), 680)
+	var t := _label("First drink served!", 42, C_GOLD)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var s := _label("That's the job: take an order, follow the recipe card, serve.\n\nNow a real shift: the clock is running and several guests order at once. Serve as many as you can. Pours close to the line and quick drinks earn bigger tips. Guests who wait too long leave.", 24)
+	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	s.autowrap_mode = TextServer.AUTOWRAP_WORD
+	v.add_child(s)
+	v.add_child(_button("Start my shift", start_shift, 30))
 
 
 func _new_order(g: Dictionary, delay := 0.0) -> void:
@@ -945,10 +1015,13 @@ func _process(delta: float) -> void:
 	_apply_cam()
 	if paused:
 		return
-	shift_left = maxf(0.0, shift_left - delta)
-	timer_label.text = "%d:%02d" % [int(shift_left) / 60, int(shift_left) % 60]
-	timer_label.add_theme_color_override("font_color", C_RED if shift_left < 20 else C_GREEN)
+	if not training:
+		shift_left = maxf(0.0, shift_left - delta)
+		timer_label.text = "%d:%02d" % [int(shift_left) / 60, int(shift_left) % 60]
+		timer_label.add_theme_color_override("font_color", C_RED if shift_left < 20 else C_GREEN)
 	for g in guests:
+		if training:
+			continue # one guest, all the time in the world
 		if not g.order.is_empty():
 			g.patience -= delta
 		elif g.served != null:
@@ -1034,6 +1107,7 @@ func _next_step() -> void:
 	cur.step = steps[cur.i]
 	_refresh_ticket()
 	var s: Dictionary = cur.step
+	_coach(s.t)
 	match s.t:
 		"glass":
 			_set_view("bar")
@@ -1564,6 +1638,7 @@ func _ready_to_serve() -> void:
 	_set_view("bar")
 	var g: Dictionary = guests[cur.guest]
 	hint_label.text = "Slide it to %s" % ("the waiter" if g.waiter else "your guest")
+	_coach("serve")
 	actions.add_child(_button("SERVE  ➜", _serve, 34, Color(0.2, 0.6, 0.35)))
 
 
@@ -1668,6 +1743,9 @@ func _serve() -> void:
 		if legend:
 			get_tree().create_timer(0.75).timeout.connect(_legend_fx.bind(g, Save.legends == 1))
 	_end_drink(true)
+	if training:
+		_coach("")
+		get_tree().create_timer(2.2).timeout.connect(_training_done)
 
 
 # =============================================================== guests come alive
@@ -2075,6 +2153,11 @@ func _end_drink(keep_glass: bool) -> void:
 		meter.visible = false
 		_clear_actions()
 		hint_label.text = "Tap a guest's order to start making it" if in_shift else ""
+	if training and in_shift and not keep_glass:
+		# a drink went wrong in training: the guest simply asks again
+		if guests[0].order.is_empty():
+			_new_order(guests[0])
+		_coach("order")
 
 
 func _end_shift() -> void:
