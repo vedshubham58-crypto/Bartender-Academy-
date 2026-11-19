@@ -38,13 +38,9 @@ var _duck_left := 0.0
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	for n in ["clink", "ice", "pour", "shake", "tip", "click", "good", "bad", "slide", "muddle", "crowd"]:
-		var s: AudioStreamWAV = load("res://audio/%s.wav" % n)
-		if n in LOOPS:
-			s = s.duplicate()
-			s.loop_mode = AudioStreamWAV.LOOP_FORWARD
-			s.loop_begin = 0
-			s.loop_end = s.data.size() / 2
-		_sfx[n] = s
+		# Loops restart from the finished signal below instead of WAV loop points:
+		# hand-set loop points crashed the Android audio thread on some phones.
+		_sfx[n] = load("res://audio/%s.wav" % n)
 	for k in 8:
 		var p := AudioStreamPlayer.new()
 		add_child(p)
@@ -52,6 +48,7 @@ func _ready() -> void:
 	for n in LOOPS:
 		var p := AudioStreamPlayer.new()
 		p.stream = _sfx[n]
+		p.finished.connect(p.play)
 		add_child(p)
 		_loops[n] = p
 	_music_bus = AudioServer.get_bus_index("Music")
