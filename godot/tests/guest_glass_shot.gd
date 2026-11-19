@@ -57,4 +57,8 @@ func _initialize() -> void:
 			await process_frame
 			var img := root.get_texture().get_image()
 			img.save_jpg("%s/%s_%02d.jpg" % [out, v, k], 0.8)
+		# and what the player sees from behind the bar
+		main.cam.make_current()
+		await process_frame
+		root.get_texture().get_image().save_jpg("%s/game_%02d.jpg" % [out, k], 0.85)
 	quit()

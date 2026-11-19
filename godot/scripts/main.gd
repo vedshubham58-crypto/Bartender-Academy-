@@ -1982,17 +1982,24 @@ func _animate_guest(g: Dictionary, delta: float) -> void:
 		People.reach(s, "Right", targets["Right"], Vector3(0.5, -1, -0.4))
 		# fingers run round the glass with the thumb on top, palm against it
 		People.orient_hand(s, "Right", GUEST_GRIP_FINGERS, Vector3.UP)
-		People.grip(s, "Right", 0.75)
+		People.grip(s, "Right", 0.9)
 		# the glass goes where the hand actually got to, so it's always held, never floating
 		# beside a hand that couldn't quite reach
 		gl.global_position = People.world_pos(s, "RightHand") - _guest_wrist_offset(gl)
+		# thumb round the far side of the glass, so it never pokes through the middle
+		var grip: Array = GUEST_GRIP.get(gl.get_meta("kind", "rocks"), [.05, .04])
+		var c: Vector3 = gl.global_position + Vector3(0, grip[0] - 0.008, 0)
+		var r: float = grip[1] + 0.012
+		People.aim_at(s, "RightHandThumb1", "RightHandThumb2", c + Vector3(-r * 0.3, 0, -r))
+		People.aim_at(s, "RightHandThumb2", "RightHandThumb3", c + Vector3(r * 0.5, 0, -r * 1.05))
+		People.aim_at(s, "RightHandThumb3", "RightHandThumb4", c + Vector3(r, 0, -r * 0.6))
 	People.look_at_point(n, g.look, g.look_amt)
 
 
 ## A seated guest's right hand on a served glass: the hand comes from the guest's side
 ## (they face +z, their right is -x), palm on the glass, fingers wrapping round it.
-const GUEST_GRIP_FROM := Vector3(-0.35, 0, -1) ## from the glass towards the wrist
-const GUEST_GRIP_FINGERS := Vector3(1, 0, -0.35) ## along the glass's near side
+const GUEST_GRIP_FROM := Vector3(-1, 0, -0.15) ## from the glass towards the wrist: palm on the glass side
+const GUEST_GRIP_FINGERS := Vector3(-0.1, 0, 1) ## towards the bar, so the fingers wrap the front
 ## Where each glass is held: [height above its base, radius there]. Stemmed glasses by the stem.
 const GUEST_GRIP := {"highball": [.065, .033], "rocks": [.035, .043], "coupe": [.035, .005],
 	"martini": [.035, .005], "flute": [.04, .004], "mug": [.055, .045]}
