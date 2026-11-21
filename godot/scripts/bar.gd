@@ -31,6 +31,8 @@ const VENUES := {
 	"speakeasy": {"name": "The Hidden Door", "unlock": 25, "about": "A secret bar behind a bookcase."},
 }
 var venue := "rooftop"
+## Richer look: glow on the bulbs and bottles, a gentle colour grade and soft corners.
+static var hd := "--sd" not in OS.get_cmdline_user_args()
 var pickables := {}
 var theme_lights: Array[Light3D] = [] ## the lights a bar light theme recolours
 var _theme_base := {} ## light -> its normal colour
@@ -226,6 +228,15 @@ func _make_materials() -> void:
 	ice_mat.rim_enabled = true
 	ice_mat.rim = 0.5
 	ice_mat.metallic_specular = 0.9
+	if hd:
+		# clear ice: see-through in the middle, bright edges and sharp highlights, a hint of blue
+		ice_mat.albedo_color = Color(0.78, 0.88, 1.0, 0.3)
+		ice_mat.roughness = 0.04
+		ice_mat.rim = 1.0
+		ice_mat.rim_tint = 0.0
+		ice_mat.metallic_specular = 1.0
+		ice_mat.emission_enabled = true
+		ice_mat.emission = Color(0.06, 0.09, 0.13)
 	rubber = mat(Color(0.07, 0.07, 0.07), 0.0, 0.85)
 	var img := Image.create(64, 64, false, Image.FORMAT_RGB8)
 	img.fill(Color(0.09, 0.09, 0.09))
@@ -620,6 +631,15 @@ func _build_station() -> void:
 	wm.metallic_specular = 0.9
 	wm.rim_enabled = true
 	wm.rim = 0.4
+	if hd:
+		# still opaque (cheap to draw), but cold and glassy: blue-grey bodies, bright edges
+		wm.albedo_color = Color(0.46, 0.58, 0.7)
+		wm.roughness = 0.05
+		wm.metallic_specular = 1.0
+		wm.rim = 1.0
+		wm.rim_tint = 0.0
+		wm.emission_enabled = true
+		wm.emission = Color(0.1, 0.14, 0.2)
 	well.material_override = wm
 	pickables["ice"] = Vector3(0, TOP, (WZ0 + WZ1) / 2)
 	# scoop
@@ -758,6 +778,14 @@ func _build_bar_top() -> void:
 	box(Vector3(3.8, .05, BZ0 - BZ1), wood, Vector3(0, BT - .025, (BZ0 + BZ1) / 2))
 	box(Vector3(3.8, BT - TOP + .1, .03), wood, Vector3(0, (BT + TOP) / 2 - .05, BZ0 - .03))
 	box(Vector3(3.8, BT, .04), wood, Vector3(0, BT / 2, BZ1 - .04))
+	if hd:
+		# the bartender's side of the bar: dark fluted panel with a warm LED line under the lip
+		var flute := mat(Color(0.13, 0.08, 0.05), 0.0, 0.4)
+		for i in 38:
+			var sl := cyl(.012, .012, BT - TOP + .04, flute, Vector3(-1.85 + i * .1, (BT + TOP) / 2 - .03, BZ0 - .008), self, 8)
+			sl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		box(Vector3(3.8, .012, .03), emissive(Color(1.0, 0.55, 0.22), 3.5), Vector3(0, BT - .045, BZ0 + .004))
+		box(Vector3(3.8, .014, .02), mat(Color(0.79, 0.64, 0.35), 1.0, 0.25), Vector3(0, BT - .028, BZ0 + .01))
 	var rail := cyl(.02, .02, 3.8, mat(Color(0.79, 0.64, 0.35), 1.0, 0.25), Vector3(0, .22, BZ1 - .2), self, 12)
 	rail.rotation.z = PI / 2
 	box(Vector3(3.6, .01, .01), emissive(Color(1.0, 0.69, 0.35), 5.0), Vector3(0, 1.075, -.84))
@@ -1085,10 +1113,30 @@ func _build_lights() -> void:
 	e.sky = sky
 	e.tonemap_mode = Environment.TONE_MAPPER_ACES
 	e.tonemap_exposure = 1.0
-	e.glow_enabled = false # glow costs several full-screen passes on tablets
-	e.glow_intensity = 0.45
-	e.glow_bloom = 0.05
-	e.glow_hdr_threshold = 1.6
+	e.glow_enabled = hd # a few small blur passes: only the brightest bits (bulbs, neon) bloom
+	e.glow_intensity = 0.7
+	e.glow_strength = 1.0
+	e.glow_bloom = 0.0
+	e.glow_hdr_threshold = 1.15
+	e.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	for lv in 7:
+		e.set_glow_level(lv, 1.0 if lv in [1, 2, 3] else 0.0)
+	if hd:
+		e.adjustment_enabled = true
+		e.adjustment_contrast = 1.1
+		e.adjustment_saturation = 1.12
+		e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+		e.tonemap_white = 6.0
+		var vl := CanvasLayer.new()
+		vl.layer = -1 # over the 3D view, under every bit of UI
+		var vr := ColorRect.new()
+		vr.set_anchors_preset(Control.PRESET_FULL_RECT)
+		vr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var vm := ShaderMaterial.new()
+		vm.shader = load("res://shaders/vignette.gdshader")
+		vr.material = vm
+		vl.add_child(vr)
+		add_child(vl)
 	e.fog_enabled = venue == "rooftop" or venue == "beach"
 	e.fog_light_color = Color(0.4, 0.26, 0.32) if venue == "rooftop" else Color(0.9, 0.62, 0.45) # city haze / sea haze
 	e.fog_density = 0.0006

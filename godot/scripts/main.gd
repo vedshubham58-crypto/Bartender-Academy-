@@ -172,6 +172,10 @@ func _ready() -> void:
 
 # =============================================================== people
 
+## Shirt colours for the four bar seats: warm, varied, never all dark.
+const GUEST_TOPS := [Color(0.62, 0.16, 0.2), Color(0.85, 0.62, 0.22), Color(0.12, 0.45, 0.48), Color(0.88, 0.82, 0.7)]
+
+
 func _spawn_people() -> void:
 	# every guest must clearly read as an adult (a drinks game, 18+): the "megan" model looks
 	# too young, so she never sits at the bar. Mia's own model only when you're not playing her.
@@ -186,6 +190,8 @@ func _spawn_people() -> void:
 		People.place_hips(n, Vector3(x, 0.9, Bar.SEAT_Z))
 		People.arms_on_bar(n, Bar.BT, Bar.BZ1, x, {"Right": Vector3(x - .12, Bar.BT + .07, Bar.BZ1 + .2)})
 		n.set_meta("model", models[i])
+		if Bar.hd:
+			People.dress(n, GUEST_TOPS[i])
 		guests.append({"node": n, "x": x, "order": {}, "patience": 0.0, "phase": i * 1.7, "bubble": null, "served": null, "drink_t": 0.0, "waiter": false, "seat_rot": n.rotation.y})
 	# the waiter waits at the service end of the bar with a tray
 	waiter = People.spawn("josh", bar)

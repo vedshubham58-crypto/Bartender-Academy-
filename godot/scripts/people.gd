@@ -344,3 +344,24 @@ static func pose(n: Node3D, kind: String) -> void:
 			aim(s, "RightForeArm", "RightHand", local_dir(n, Vector3(.4, .9, .3)))
 		_:
 			arms_down(n)
+
+
+## Recolours a guest's top (shirt, sweater, hoodie, jacket), so the bar isn't all navy and black.
+static func dress(n: Node3D, tint: Color, amount := 0.85) -> void:
+	for m in n.find_children("*", "MeshInstance3D", true, false):
+		var nm := String(m.name).to_lower()
+		if not ("shirt" in nm or "suit" in nm or "sweater" in nm or "hoody" in nm or "tops" in nm):
+			continue
+		for si in m.mesh.get_surface_count():
+			var src = m.get_active_material(si)
+			if not (src is StandardMaterial3D):
+				continue
+			var sm := ShaderMaterial.new()
+			sm.shader = load("res://shaders/garment.gdshader")
+			sm.set_shader_parameter("tex", src.albedo_texture)
+			if src.normal_enabled and src.normal_texture:
+				sm.set_shader_parameter("nrm", src.normal_texture)
+				sm.set_shader_parameter("has_nrm", true)
+			sm.set_shader_parameter("tint", tint)
+			sm.set_shader_parameter("amount", amount)
+			m.set_surface_override_material(si, sm)
